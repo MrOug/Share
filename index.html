@@ -310,11 +310,33 @@
                             <span style="font-weight: 700; font-size: 10px; color: var(--text-dim);">DATA_MODE</span>
                             <select id="dataMode" class="code-input" onchange="toggleDataMode()">
                                 <option value="manual">Manual Entry</option>
-                                <option value="top50">Top 50 Stocks</option>
-                                <option value="weeklyGainers">Query: Top 50 Gainers (Week)</option>
-                                <option value="weeklyLosers">Query: Top 50 Losers (Week)</option>
-                                <option value="monthlyGainers">Query: Top 50 Gainers (Month)</option>
-                                <option value="monthlyLosers">Query: Top 50 Losers (Month)</option>
+                                <option value="top50">Top 50 Stocks (Market Cap)</option>
+                                <optgroup label="🔥 Performance Based">
+                                    <option value="dailyGainers">Top 50 Gainers - Today</option>
+                                    <option value="dailyLosers">Top 50 Losers - Today</option>
+                                    <option value="weeklyGainers">Top 50 Gainers - Week</option>
+                                    <option value="weeklyLosers">Top 50 Losers - Week</option>
+                                    <option value="monthlyGainers">Top 50 Gainers - Month</option>
+                                    <option value="monthlyLosers">Top 50 Losers - Month</option>
+                                </optgroup>
+                                <optgroup label="📊 Volume/Value Based">
+                                    <option value="highestVolume">Highest Volume - Today</option>
+                                    <option value="highestValue">Highest Value Traded - Today</option>
+                                </optgroup>
+                                <optgroup label="🏢 Index Constituents">
+                                    <option value="nifty50">Nifty 50</option>
+                                    <option value="niftyNext50">Nifty Next 50</option>
+                                    <option value="bankNifty">Bank Nifty</option>
+                                    <option value="sensex">Sensex 30</option>
+                                </optgroup>
+                                <optgroup label="🏭 Sector Based">
+                                    <option value="sectorBanking">Banking Sector</option>
+                                    <option value="sectorIT">IT Sector</option>
+                                    <option value="sectorPharma">Pharma Sector</option>
+                                    <option value="sectorAuto">Auto Sector</option>
+                                    <option value="sectorFMCG">FMCG Sector</option>
+                                    <option value="sectorEnergy">Energy/Oil & Gas</option>
+                                </optgroup>
                             </select>
                         </div>
 
@@ -645,6 +667,110 @@
 
         const top50Stocks = Object.keys(INSTRUMENTS.NSE_EQ);
 
+        // === DYNAMIC INSTRUMENT MASTER (Downloaded from Upstox CDN) ===
+        let DYNAMIC_INSTRUMENTS = null;
+        let isLoadingInstruments = false;
+
+        // === INDEX CONSTITUENTS (Complete lists - will be validated against downloaded master) ===
+        const NIFTY_50 = ['RELIANCE','TCS','HDFCBANK','INFY','ICICIBANK','HINDUNILVR','ITC','SBIN','BHARTIARTL','KOTAKBANK','BAJFINANCE','LT','ASIANPAINT','AXISBANK','MARUTI','TITAN','SUNPHARMA','ULTRACEMCO','NESTLEIND','WIPRO','HCLTECH','TECHM','POWERGRID','NTPC','BAJAJFINSV','M&M','ONGC','TATASTEEL','ADANIPORTS','JSWSTEEL','INDUSINDBK','GRASIM','TATAMOTORS','DIVISLAB','DRREDDY','BRITANNIA','CIPLA','EICHERMOT','HINDALCO','BPCL','COALINDIA','HEROMOTOCO','UPL','SHREECEM','APOLLOHOSP','SBILIFE','BAJAJ-AUTO','ADANIENT','HDFCLIFE','TATACONSUM'];
+
+        const NIFTY_NEXT_50 = ['ADANIPOWER','AMBUJACEM','ADANIGREEN','BAJAJHLDNG','BANDHANBNK','BEL','BERGEPAINT','BOSCHLTD','CANBK','CHOLAFIN','COLPAL','DABUR','DLF','GAIL','GODREJCP','HAVELLS','HDFCAMC','ICICIGI','ICICIPRULI','INDIGO','INDUSTOWER','IOC','JSWENERGY','LICHSGFIN','LUPIN','MARICO','NAUKRI','NMDC','PGHH','PIDILITIND','PNB','RECLTD','SBICARD','SHRIRAMFIN','SIEMENS','SRF','TATACOMM','TATAPOWER','TORNTPHARM','TRENT','UNIONBANK','MCDOWELL-N','HINDPETRO','SAIL','VEDL','VOLTAS','ZOMATO','ZYDUSLIFE','MOTHERSON','LTIM'];
+
+        const BANK_NIFTY = ['HDFCBANK','ICICIBANK','SBIN','KOTAKBANK','AXISBANK','INDUSINDBK','AUBANK','BANDHANBNK','FEDERALBNK','IDFCFIRSTB','PNB','BANKBARODA'];
+
+        const SENSEX = ['RELIANCE','TCS','HDFCBANK','INFY','ICICIBANK','HINDUNILVR','ITC','SBIN','BHARTIARTL','KOTAKBANK','BAJFINANCE','LT','ASIANPAINT','AXISBANK','MARUTI','TITAN','SUNPHARMA','ULTRACEMCO','NESTLEIND','WIPRO','HCLTECH','TECHM','POWERGRID','NTPC','BAJAJFINSV','M&M','TATASTEEL','INDUSINDBK','TATAMOTORS','JIOFIN'];
+
+        // === SECTOR MAPPING (Complete - will be validated dynamically) ===
+        const SECTOR_STOCKS = {
+            banking: ['HDFCBANK','ICICIBANK','SBIN','KOTAKBANK','AXISBANK','INDUSINDBK','FEDERALBNK','BANDHANBNK','IDFCFIRSTB','PNB','CANBK','BANKBARODA','AUBANK','UNIONBANK'],
+            it: ['TCS','INFY','WIPRO','HCLTECH','TECHM','LTIM','MPHASIS','COFORGE','PERSISTENT','OFSS'],
+            pharma: ['SUNPHARMA','DRREDDY','CIPLA','DIVISLAB','LUPIN','BIOCON','TORNTPHARM','ALKEM','AUROPHARMA','ABBOTINDIA','GRANULES','LAURUSLABS'],
+            auto: ['MARUTI','TATAMOTORS','M&M','EICHERMOT','BAJAJ-AUTO','HEROMOTOCO','ASHOKLEY','TVSMOTOR','ESCORTS','MOTHERSON','APOLLOTYRE','BALKRISIND'],
+            fmcg: ['HINDUNILVR','ITC','NESTLEIND','BRITANNIA','DABUR','MARICO','GODREJCP','COLPAL','TATACONSUM','UBL','EMAMILTD','PIDILITIND','VBL'],
+            energy: ['RELIANCE','ONGC','BPCL','IOC','HINDPETRO','GAIL','COALINDIA','ADANIGREEN','TATAPOWER','NTPC','POWERGRID','ADANIPOWER']
+        };
+
+        // === DOWNLOAD COMPLETE INSTRUMENT MASTER FROM UPSTOX CDN ===
+        async function loadCompleteInstrumentMaster() {
+            if (DYNAMIC_INSTRUMENTS) return DYNAMIC_INSTRUMENTS;
+            if (isLoadingInstruments) {
+                while (isLoadingInstruments) { await new Promise(resolve => setTimeout(resolve, 100)); }
+                return DYNAMIC_INSTRUMENTS;
+            }
+
+            isLoadingInstruments = true;
+            const exchange = document.getElementById('exchange').value;
+            const exchangeName = exchange.split('_')[0]; // NSE or BSE
+
+            try {
+                log(`📥 Downloading ${exchangeName} instrument master from Upstox CDN...`);
+
+                // Download from Upstox official CDN (no auth needed)
+                const url = `https://assets.upstox.com/market-quote/instruments/exchange/${exchangeName}.json.gz`;
+                const response = await fetch(url);
+
+                if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
+
+                const arrayBuffer = await response.arrayBuffer();
+                const decompressed = pako.ungzip(new Uint8Array(arrayBuffer), { to: 'string' });
+                const instruments = JSON.parse(decompressed);
+
+                // Build lookup map: SYMBOL -> instrument_key
+                DYNAMIC_INSTRUMENTS = {};
+                instruments.forEach(inst => {
+                    if (inst.instrument_type === 'EQ' && inst.trading_symbol) {
+                        const symbol = inst.trading_symbol.toUpperCase();
+                        DYNAMIC_INSTRUMENTS[symbol] = inst.instrument_key;
+                    }
+                });
+
+                log(`✓ Loaded ${Object.keys(DYNAMIC_INSTRUMENTS).length} ${exchangeName} equity instruments`);
+                isLoadingInstruments = false;
+                return DYNAMIC_INSTRUMENTS;
+
+            } catch (error) {
+                log(`⚠ Error loading instruments: ${error.message}. Using fallback.`);
+                isLoadingInstruments = false;
+                DYNAMIC_INSTRUMENTS = {};
+                return DYNAMIC_INSTRUMENTS;
+            }
+        }
+
+        // === GET INSTRUMENT KEY (Try dynamic first, fallback to hardcoded) ===
+        async function getInstrumentKey(symbol) {
+            const exchange = document.getElementById('exchange').value;
+
+            // Try hardcoded list first (fast)
+            if (INSTRUMENTS[exchange] && INSTRUMENTS[exchange][symbol]) {
+                return INSTRUMENTS[exchange][symbol];
+            }
+
+            // Load and try dynamic master
+            const master = await loadCompleteInstrumentMaster();
+            if (master[symbol]) {
+                return master[symbol];
+            }
+
+            return null;
+        }
+
+        // === VALIDATE SYMBOLS AGAINST INSTRUMENT MASTER ===
+        async function getValidSymbols(symbols) {
+            const valid = [];
+            await loadCompleteInstrumentMaster(); // Ensure loaded
+
+            for (const symbol of symbols) {
+                const key = await getInstrumentKey(symbol);
+                if (key) {
+                    valid.push(symbol);
+                } else {
+                    log(`⚠ Skipping ${symbol}: Not found in instrument master`);
+                }
+            }
+
+            return valid;
+        }
+
         // --- FUNCTIONS ---
 
         async function loadInstrumentsCache() {
@@ -729,10 +855,41 @@
 
         async function getStockList() {
             const mode = document.getElementById('dataMode').value;
-            if (mode === 'top50') return top50Stocks;
-            if (mode.includes('weekly') || mode.includes('monthly')) return await getTopMovers(mode);
-            const symbols = document.getElementById('symbols').value;
-            return symbols.split(',').map(s => s.trim().toUpperCase()).filter(s => s);
+
+            // Manual entry
+            if (mode === 'manual') {
+                const symbols = document.getElementById('symbols').value;
+                const entered = symbols.split(',').map(s => s.trim().toUpperCase()).filter(s => s);
+                return await getValidSymbols(entered);
+            }
+
+            // Top 50 by market cap
+            if (mode === 'top50') return await getValidSymbols(top50Stocks);
+
+            // Performance based (gainers/losers)
+            if (mode.includes('Gainers') || mode.includes('Losers')) {
+                return await getTopMovers(mode);
+            }
+
+            // Volume/Value based
+            if (mode === 'highestVolume' || mode === 'highestValue') {
+                return await getHighestVolumeStocks(mode);
+            }
+
+            // Index constituents - validate against downloaded master
+            if (mode === 'nifty50') return await getValidSymbols(NIFTY_50);
+            if (mode === 'niftyNext50') return await getValidSymbols(NIFTY_NEXT_50);
+            if (mode === 'bankNifty') return await getValidSymbols(BANK_NIFTY);
+            if (mode === 'sensex') return await getValidSymbols(SENSEX);
+
+            // Sector based - validate against downloaded master
+            if (mode.startsWith('sector')) {
+                const sector = mode.replace('sector', '').toLowerCase();
+                const sectorList = SECTOR_STOCKS[sector] || [];
+                return await getValidSymbols(sectorList);
+            }
+
+            return [];
         }
 
         async function getTopMovers(mode) {
@@ -740,16 +897,22 @@
                 showStatus('❌ Please authenticate first', 'error');
                 return [];
             }
+            const isDaily = mode.includes('daily');
             const isWeekly = mode.includes('weekly');
             const isGainer = mode.includes('Gainers');
             const exchange = document.getElementById('exchange').value;
             log(`Fetching ${mode}... This may take a moment.`);
             const toDate = new Date().toISOString().split('T')[0];
-            const fromDate = new Date(Date.now() - (isWeekly ? 7 : 30) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            const daysBack = isDaily ? 1 : (isWeekly ? 7 : 30);
+            const fromDate = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
             const results = [];
+
+            // Ensure dynamic instruments loaded
+            await loadCompleteInstrumentMaster();
+
             for (const symbol of top50Stocks) {
                 try {
-                    const instrumentKey = INSTRUMENTS[exchange]?.[symbol];
+                    const instrumentKey = await getInstrumentKey(symbol);
                     if (!instrumentKey) continue;
                     const url = `https://api.upstox.com/v3/historical-candle/${encodeURIComponent(instrumentKey)}/days/1/${toDate}/${fromDate}`;
                     const response = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' } });
