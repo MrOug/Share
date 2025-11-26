@@ -1,94 +1,1646 @@
-// FIXED genChartV3 function - Replace your existing one (around line 1641)
-
-async function genChartV3(){
-const inst=document.getElementById('cInst').value.trim();
-const inc=document.getElementById('cInc').value.trim();
-const rng=document.getElementById('cRng').value;
-if(!accessToken){log('❌ Login');return;}
-if(!inst||!inc){log('❌ Fill fields');return;}
-log('== V3 CHART ==');
-
-const win=window.open('','_blank');
-
-// FIX: Use string concatenation, not nested template literals
-const html = '
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>' + inst + '</title>' +
-    '
-    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"><\/script>' +
-        '<style>*{margin:0;padding:0}body{background:#0a0e1a;font-family:monospace;overflow:hidden}' +
-            '#chart{width:100vw;height:100vh}#controls{position:absolute;top:15px;left:15px;z-index:20;' +
-            'background:rgba(0,0,0,0.95);padding:15px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.5);max-width:450px}' +
-            '.title{font-size:20px;font-weight:bold;margin-bottom:12px;color:#fff;word-wrap:break-word}' +
-            '.tf-btn{background:#1e293b;color:#fff;border:2px solid #334155;padding:8px 16px;margin:0 4px 8px 0;' +
-            'border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;font-family:monospace;transition:all 0.2s}' +
-            '.tf-btn:hover{background:#334155;border-color:#475569}.tf-btn.active{background:#2563eb;border-color:#3b82f6}' +
-            '.badges{margin-top:12px;max-height:100px;overflow-y:auto}' +
-            '.badge{display:inline-block;font-size:11px;font-weight:bold;padding:5px 12px;border-radius:5px;margin:3px 5px 3px 0;white-space:nowrap}' +
-            '.pm{background:#26a69a;color:#000}.py{background:#2563eb;color:#fff}' +
-            '.legend{font-size:10px;color:#888;margin-top:12px}.loading{color:#2563eb;margin-top:8px;font-size:11px}' +
-            '</style></head><body><div id="controls"><div class="title">' + inst + '</div><div>' +
-            '<button class="tf-btn" onclick="loadTF(\'hours\',4,this)">4H</button>' +
-            '<button class="tf-btn active" onclick="loadTF(\'days\',1,this)">1D</button>' +
-            '<button class="tf-btn" onclick="loadTF(\'weeks\',1,this)">1W</button></div>' +
-            '<div class="loading" id="ld" style="display:none">Loading...</div><div class="badges" id="lbl"></div>' +
-            '<div class="legend">🔵 PY (birth month) | 🟢 PM (every month)</div></div><div id="chart"></div>' +
-            '<script>' +
-            'const TK="' + accessToken + '";const IN="' + inst + '";const IC="' + inc + '";const RG="' + rng + '";' +
-            'let ch,cs;const ms=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];' +
-            'const bm=parseInt(IC.split("/")[1]);' +
-            'function cPY(i,t){const ip=i.split("/");const bd=parseInt(ip[0]),bm=parseInt(ip[1]);' +
-            'const mm={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};' +
-            'const tp=t.split(" ");const tm=mm[tp[0]],ty=parseInt(tp[1]);const yu=tm>=bm?ty:ty-1;let to=bd+bm;' +
-            'for(const d of yu.toString())to+=parseInt(d);const mn=[11,22,28,33,20];if(mn.includes(to))return to;' +
-            'while(to>9){to=to.toString().split("").reduce((s,d)=>s+parseInt(d),0);if(mn.includes(to))return to;}return to;}' +
-            'function cPM(i,t){const ip=i.split("/");const bd=parseInt(ip[0]),bm=parseInt(ip[1]);' +
-            'const mm={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};' +
-            'const tp=t.split(" ");const tm=mm[tp[0]],ty=parseInt(tp[1]);const yu=tm>=bm?ty:ty-1;let to=bd+bm+tm;' +
-            'for(const d of yu.toString())to+=parseInt(d);const mn=[11,22,28,33,20];if(mn.includes(to))return to;' +
-            'while(to>9){to=to.toString().split("").reduce((s,d)=>s+parseInt(d),0);if(mn.includes(to))return to;}return to;}' +
-            // CORRECTED V3 API: /{instrument}/{unit}/{interval}/{to}/{from}
-            'async function loadTF(unit,interval,el){document.querySelectorAll(".tf-btn").forEach(b=>b.classList.remove("active"));' +
-            'if(el)el.classList.add("active");document.getElementById("ld").style.display="block";' +
-            'const to=new Date();let from=new Date();' +
-            'if(RG==="1Y")from.setFullYear(to.getFullYear()-1);' +
-            'else if(RG==="2Y")from.setFullYear(to.getFullYear()-2);' +
-            'else if(RG==="5Y")from.setFullYear(to.getFullYear()-5);' +
-            'else from.setFullYear(to.getFullYear()-10);' +
-            'const url="https://api.upstox.com/v3/historical-candle/"+encodeURIComponent(IN)+"/"+unit+"/"+interval+"/"' +
-            '+to.toISOString().split("T")[0]+"/"+from.toISOString().split("T")[0];' +
-            'try{const r=await fetch(url,{headers:{Accept:"application/json",Authorization:"Bearer "+TK}});' +
-            'if(!r.ok)throw new Error("API "+r.status);const res=await r.json();' +
-            'if(!res.data||!res.data.candles||!res.data.candles.length)throw new Error("No data");' +
-            'const cn=res.data.candles.reverse();const cd=[];const mk=[];const pm=new Map();let lm=-1;' +
-            'for(const[ts,o,h,l,c]of cn){const d=new Date(ts);const my=ms[d.getMonth()]+" "+d.getFullYear();' +
-            'const p=cPM(IC,my);const y=cPY(IC,my);const t=Math.floor(d.getTime()/1000);' +
-            'cd.push({time:t,open:o,high:h,low:l,close:c});const nm=d.getMonth()!==lm;if(nm){lm=d.getMonth();' +
-            'const ib=d.getMonth()+1===bm;if(ib){' +
-            'mk.push({time:t,position:"aboveBar",color:"#2563eb",shape:"circle",text:"PY:"+y+" PM:"+p,size:1});' +
-            'pm.set("PY:"+y+" PM:"+p,{label:"PY:"+y+" PM:"+p,isPY:true});}else{' +
-            'mk.push({time:t,position:"belowBar",color:"#26a69a",shape:"circle",text:"PM:"+p,size:1});' +
-            'pm.set("PM:"+p,{label:"PM:"+p,isPY:false});}}}cs.setData(cd);cs.setMarkers(mk);' +
-            'const lb=document.getElementById("lbl");lb.innerHTML="";' +
-            'for(const[_,l]of pm){lb.innerHTML+="<span class=\\"badge "+(l.isPY?"py":"pm")+"\\">"+ l.label+"</span>";}' +
-            'document.getElementById("ld").style.display="none";}catch(e){alert("Error: "+e.message);' +
-            'document.getElementById("ld").style.display="none";}}' +
-            'ch=LightweightCharts.createChart(document.getElementById("chart"),{' +
-            'layout:{background:{color:"#0a0e1a"},textColor:"#d1d4dc"},' +
-            'grid:{vertLines:{color:"#1a1f33"},horzLines:{color:"#1a1f33"}},' +
-            'crosshair:{mode:LightweightCharts.CrosshairMode.Normal},' +
-            'rightPriceScale:{borderColor:"#2b2b43"},timeScale:{borderColor:"#2b2b43",timeVisible:true},' +
-            'width:window.innerWidth,height:window.innerHeight});' +
-            'cs=ch.addCandlestickSeries({upColor:"#26a69a",downColor:"#ef5350",borderUpColor:"#26a69a",' +
-            'borderDownColor:"#ef5350",wickUpColor:"#26a69a",wickDownColor:"#ef5350"});' +
-            'window.addEventListener("resize",()=>{ch.applyOptions({width:window.innerWidth,height:window.innerHeight});});' +
-            'loadTF("days",1);<\/script></body></html>';
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upstox Console V3 (Max History)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-page: #ffffff;
+            --bg-panel: #f9fafb;
+            --border: #000000;
+            --text: #000000;
+            --text-dim: #52525b;
+            --success-bg: #dcfce7;
+            --success-text: #15803d;
+            --error-bg: #fee2e2;
+            --error-text: #b91c1c;
+            --accent: #2563eb;
+            --font: 'JetBrains Mono', monospace;
+        }
 
-        win.document.write(html);
-        win.document.close();
-        log('✓ V3 Chart opened');
-}
+        [data-theme="dark"] {
+            --bg-page: #050505;
+            --bg-panel: #111111;
+            --border: #333333;
+            --text: #eeeeee;
+            --text-dim: #888888;
+            --success-bg: #064e3b;
+            --success-text: #34d399;
+            --error-bg: #7f1d1d;
+            --error-text: #f87171;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--bg-page);
+            color: var(--text);
+            font-family: var(--font);
+            font-size: 12px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow: hidden;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        header {
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            flex-shrink: 0;
+        }
+
+        h1 { font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: -0.5px; }
+        .subtitle { color: var(--text-dim); margin-top: 4px; font-size: 11px; }
+
+        .interface-container {
+            display: grid;
+            grid-template-columns: 380px 40px 1fr;
+            gap: 0;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .panel {
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-page);
+            min-height: 0;
+        }
+
+        .panel-header {
+            padding: 10px 15px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 700;
+            background: var(--bg-panel);
+            text-transform: uppercase;
+            font-size: 11px;
+            flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-scroll-area {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .panel-footer {
+            border-top: 1px solid var(--border);
+            background: var(--bg-panel);
+            padding: 0;
+            flex-shrink: 0;
+        }
+
+        details {
+            border: 1px solid var(--border);
+            background: var(--bg-page);
+            margin-bottom: 10px;
+        }
+
+        summary {
+            padding: 10px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 10px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            background: var(--bg-panel);
+            list-style: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+
+        summary::-webkit-details-marker { display: none; }
+        summary::after { content: '+'; font-size: 14px; font-weight: bold; }
+        details[open] summary { border-bottom: 1px solid var(--border); }
+        details[open] summary::after { content: '-'; }
+
+        .details-content {
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 500px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .code-input {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            padding: 8px;
+            font-family: var(--font);
+            font-size: 11px;
+            width: 100%;
+            color: var(--text);
+            outline: none;
+        }
+        .code-input:focus { border-color: var(--text); background: var(--bg-page); }
+        textarea.code-input { min-height: 60px; resize: vertical; }
+        
+        .file-input-wrapper {
+            position: relative;
+            border: 1px dashed var(--border);
+            padding: 10px;
+            background: var(--bg-panel);
+            text-align: center;
+            cursor: pointer;
+        }
+        .file-input-wrapper:hover { background: var(--bg-page); }
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .file-label { font-size: 10px; color: var(--text-dim); pointer-events: none; }
+
+        .btn {
+            width: 100%;
+            background: var(--text);
+            color: var(--bg-page);
+            border: 1px solid var(--text);
+            padding: 10px;
+            font-family: var(--font);
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-size: 11px;
+            transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+        .btn.theme-toggle { width: auto; padding: 4px 8px; font-size: 10px; background: transparent; color: var(--text); border: 1px solid var(--border); }
+        .btn.patch { background: var(--success-text); border-color: var(--success-text); color: white; }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            border: 1px dashed var(--border);
+            font-size: 11px;
+            background: var(--bg-panel);
+            margin-bottom: 15px;
+        }
+        .connection-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--error-text); display: inline-block; margin-right: 6px; }
+        .connection-dot.connected { background: var(--success-text); }
+
+        .flow-connector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: var(--text-dim);
+        }
+
+        .terminal {
+            padding: 10px;
+            font-size: 10px;
+            height: 120px;
+            overflow-y: auto;
+            font-family: var(--font);
+            background: var(--bg-page);
+        }
+        .log-entry { margin-bottom: 4px; word-break: break-all; border-bottom: 1px solid rgba(0,0,0,0.05); }
+        [data-theme="dark"] .log-entry { border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            padding: 15px;
+        }
+
+        .tech-card {
+            border: 1px solid var(--border);
+            background: var(--bg-page);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.1s;
+        }
+        .tech-card:hover { transform: translateY(-2px); box-shadow: 4px 4px 0 rgba(0,0,0,0.1); }
+
+        .card-top {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            background: var(--bg-panel);
+        }
+
+        .symbol-title { font-size: 14px; font-weight: 700; display: block; }
+        .company-name { font-size: 10px; color: var(--text-dim); display: block; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+
+        .badge { font-size: 10px; padding: 2px 6px; border: 1px solid var(--border); font-weight: 700; }
+        .badge.pos { background: var(--success-bg); color: var(--success-text); border-color: var(--success-text); }
+        .badge.neg { background: var(--error-bg); color: var(--error-text); border-color: var(--error-text); }
+
+        .card-metrics { padding: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 10px; }
+        .metric-label { color: var(--text-dim); margin-bottom: 2px; display: block; }
+        .metric-val { font-weight: 700; font-size: 11px; }
+
+        .mini-table { border-top: 1px solid var(--border); width: 100%; font-size: 9px; border-collapse: collapse; }
+        .mini-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); color: var(--text-dim); }
+        .mini-table tr:last-child td { border-bottom: none; }
+        .mini-table td:last-child { text-align: right; font-weight: 700; }
+
+        .progress-container { height: 4px; background: var(--bg-panel); width: 100%; margin-top: 10px; display: none; }
+        .progress-fill { height: 100%; background: var(--text); width: 0%; transition: width 0.2s; }
+
+        .divider { height: 1px; background: var(--border); margin: 20px 0; opacity: 0.3; }
+        .hidden { display: none; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.js"></script>
+
+    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h1>Upstox_API_Console [V3]</h1>
+            <div class="subtitle">// Historical Data Extraction & Data Patching</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div id="authStatus" style="font-size: 10px; color: var(--text-dim);"></div>
+            <button class="btn theme-toggle" onclick="toggleTheme()">🌗 Theme</button>
+        </div>
+    </header>
+
+    <div class="interface-container">
+        
+        <div class="panel">
+            <div class="panel-header">1. Configuration & Actions</div>
+            
+            <div class="panel-scroll-area">
+                
+                <div class="status-badge">
+                    <div style="display: flex; align-items: center;">
+                        <span class="connection-dot" id="connectionDot"></span>
+                        <span id="connectionText">Disconnected</span>
+                    </div>
+                    <button onclick="authenticateUpstox()" style="background: none; border: none; text-decoration: underline; cursor: pointer; font-family: inherit; font-size: 10px; color: var(--text);">[AUTH]</button>
+                </div>
+
+                <details open>
+                    <summary>1. DATA SOURCE</summary>
+                    <div class="details-content">
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            <span style="font-weight: 700; font-size: 10px; color: var(--text-dim);">DATA_MODE</span>
+                            <select id="dataMode" class="code-input" onchange="toggleDataMode()">
+                                <option value="manual">Manual Entry</option>
+                                <option value="top50">Top 50 Stocks</option>
+                                <option value="weeklyGainers">Query: Top 50 Gainers (Week)</option>
+                                <option value="weeklyLosers">Query: Top 50 Losers (Week)</option>
+                                <option value="monthlyGainers">Query: Top 50 Gainers (Month)</option>
+                                <option value="monthlyLosers">Query: Top 50 Losers (Month)</option>
+                            </select>
+                        </div>
+
+                        <div id="manualEntry" style="display: flex; flex-direction: column; gap: 6px;">
+                            <span style="font-weight: 700; font-size: 10px; color: var(--text-dim);">SYMBOLS_ARRAY</span>
+                            <textarea id="symbols" class="code-input" placeholder="RELIANCE, TCS, INFY"></textarea>
+                        </div>
+                    </div>
+                </details>
+
+                <details open>
+                    <summary>2. PARAMETERS</summary>
+                    <div class="details-content">
+                        <div style="display: grid; gap: 8px;">
+                            <select id="exchange" class="code-input">
+                                <option value="NSE_EQ">NSE_EQ</option>
+                                <option value="BSE_EQ">BSE_EQ</option>
+                            </select>
+                            
+                            <select id="interval" class="code-input">
+                                <optgroup label="Standard">
+                                    <option value="days/1">Daily</option>
+                                    <option value="weeks/1">Weekly</option>
+                                    <option value="months/1" selected>Monthly</option>
+                                </optgroup>
+                                <optgroup label="Minutes">
+                                    <option value="minutes/1">1 Minute</option>
+                                    <option value="minutes/5">5 Minutes</option>
+                                    <option value="minutes/15">15 Minutes</option>
+                                    <option value="minutes/30">30 Minutes</option>
+                                    <option value="minutes/60">60 Minutes</option>
+                                </optgroup>
+                                <optgroup label="Hours">
+                                    <option value="hours/1">1 Hour</option>
+                                    <option value="hours/4">4 Hours</option>
+                                </optgroup>
+                            </select>
+
+                            <select id="timePeriod" class="code-input">
+                                <option value="1">Lookback: 1 Month</option>
+                                <option value="3">Lookback: 3 Months</option>
+                                <option value="6">Lookback: 6 Months</option>
+                                <option value="12" selected>Lookback: 1 Year</option>
+                                <option value="24">Lookback: 2 Years</option>
+                                <option value="60">Lookback: 5 Years</option>
+                                <option value="120">Lookback: 10 Years</option>
+                                <option value="max" style="font-weight: bold; color: var(--accent);">➤ Since Inception (MAX)</option>
+                            </select>
+                        </div>
+                    </div>
+                </details>
+
+                <button class="btn" onclick="fetchStockData()">> EXECUTE_ANALYSIS</button>
+                
+                <div class="progress-container" id="progress">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div id="progressText" style="text-align: center; font-size: 10px; color: var(--text-dim); margin-top: 4px;"></div>
+
+                <button id="exportBtn" class="btn secondary hidden" onclick="exportToCSV()">[DOWNLOAD RAW .CSV]</button>
+
+                <div class="divider"></div>
+
+                <details>
+                    <summary>3. POST-PROCESSING (DATE PATCH)</summary>
+                    <div class="details-content">
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            <span style="font-weight: 700; font-size: 10px; color: var(--text-dim);">1. LOAD EXTRACTED CSV</span>
+                            <label class="file-input-wrapper">
+                                <span class="file-label" id="stockFileLabel">Select stocks.csv...</span>
+                                <input type="file" id="stocksFile" accept=".csv" onchange="document.getElementById('stockFileLabel').textContent = this.files[0].name">
+                            </label>
+                        </div>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            <span style="font-weight: 700; font-size: 10px; color: var(--text-dim);">2. LOAD INCORPORATION DATA</span>
+                            <label class="file-input-wrapper">
+                                <span class="file-label" id="teFileLabel">Select te.csv...</span>
+                                <input type="file" id="teFile" accept=".csv" onchange="document.getElementById('teFileLabel').textContent = this.files[0].name">
+                            </label>
+                        </div>
+
+                        <button class="btn patch" onclick="processDateUpdate()">RUN DATE UPDATE & DOWNLOAD</button>
+                    </div>
+                </details>
+
+                <div class="divider"></div>
+
+                <details>
+                    <summary>4. NUMEROLOGY + CHINESE ZODIAC</summary>
+                    <div class="details-content">
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            <span style="font-weight: 700; font-size: 10px; color: var(--text-dim);">LOAD STOCK CSV WITH MONTHLY DATA</span>
+                            <label class="file-input-wrapper">
+                                <span class="file-label" id="numerologyFileLabel">Select stocks_updated.csv...</span>
+                                <input type="file" id="numerologyFile" accept=".csv" onchange="document.getElementById('numerologyFileLabel').textContent = this.files[0].name">
+                            </label>
+                            <span style="font-size: 9px; color: var(--text-dim);">Processes ALL months with Numerology + Chinese Zodiac Signs</span>
+                        </div>
+
+                        <button class="btn patch" onclick="processNumerology()">CALCULATE ALL & DOWNLOAD</button>
+                    </div>
+                </details>
+
+                <div class="divider"></div>
+
+                <details>
+                    <summary>5. ML PATTERN ANALYSIS (BY COMPANY)</summary>
+                    <div class="details-content">
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            <span style="font-weight: 700; font-size: 10px; color: var(--text-dim);">UPLOAD NUMEROLOGY CSV FILE</span>
+                            <label class="file-input-wrapper">
+                                <span class="file-label" id="mlFileLabel">Select stocks_numerology_zodiac_*.csv...</span>
+                                <input type="file" id="mlFile" accept=".csv" onchange="document.getElementById('mlFileLabel').textContent = this.files[0].name">
+                            </label>
+                            <span style="font-size: 9px; color: var(--text-dim);">Analyzes patterns for EACH COMPANY SEPARATELY - No averaging</span>
+                        </div>
+
+                        <button class="btn get" onclick="analyzeMLPatterns()">ANALYZE BY COMPANY & DOWNLOAD</button>
+                    </div>
+                </details>
+
+                <div class="divider"></div>
+
+                <details open>
+                    <summary>6. CANDLESTICK CHART (WEEKLY) WITH NUMEROLOGY</summary>
+                    <div class="details-content">
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            <span style="font-weight: 700; font-size: 10px; color: var(--text-dim);">1. INSTRUMENT KEY</span>
+                            <input type="text" id="chartInstrumentKey" class="code-input" placeholder="e.g., NSE_EQ|INE009A01021" />
+                            <span style="font-size: 9px; color: var(--text-dim);">Get from Instant API section above (copy instrument_key)</span>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            <span style="font-weight: 700; font-size: 10px; color: var(--text-dim);">2. INCORPORATION DATE (DD/MM/YYYY)</span>
+                            <input type="text" id="chartIncorpDate" class="code-input" placeholder="e.g., 02/07/1981" />
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            <span style="font-weight: 700; font-size: 10px; color: var(--text-dim);">3. DATE RANGE</span>
+                            <select id="chartDateRange" class="code-input">
+                                <option value="1Y">1 Year</option>
+                                <option value="2Y">2 Years</option>
+                                <option value="5Y">5 Years</option>
+                                <option value="MAX">Max (from 2008)</option>
+                            </select>
+                        </div>
+
+                        <button class="btn post" onclick="genChart()">GENERATE CHART</button>
+
+                        <div id="chartLoadingStatus" style="display:none; font-size: 9px; color: var(--accent); margin-top: 8px;"></div>
+
+                        <div id="chartContainer" style="display:none; margin-top: 10px;">
+                            <canvas id="candlestickCanvas" style="width: 100%; height: 500px; background: var(--bg-panel);"></canvas>
+                        </div>
+                    </div>
+                </details>
+
+                <div class="divider"></div>
+
+                <details>
+                    <summary>4. NUMEROLOGY</summary>
+                    <div class="details-content">
+                        <label class="file-input-wrapper">
+                            <span class="file-label" id="nF">CSV...</span>
+                            <input type="file" id="numerologyFile" accept=".csv" onchange="document.getElementById('nF').textContent=this.files[0].name">
+                        </label>
+                        <button class="btn patch" onclick="processNumerology()">CALC</button>
+                    </div>
+                </details>
+
+                <div class="divider"></div>
+
+                <details>
+                    <summary>5. ML</summary>
+                    <div class="details-content">
+                        <label class="file-input-wrapper">
+                            <span class="file-label" id="mF">CSV...</span>
+                            <input type="file" id="mlFile" accept=".csv" onchange="document.getElementById('mF').textContent=this.files[0].name">
+                        </label>
+                        <button class="btn get" onclick="analyzeMLPatterns()">ANALYZE</button>
+                    </div>
+                </details>
+
+                <div class="divider"></div>
+
+                <details open>
+                    <summary>6. CHART - V3 API</summary>
+                    <div class="details-content">
+                        <input type="text" id="cSearch" class="code-input" placeholder="Search: Reliance, TCS, HDFC" style="margin-bottom:8px;"/>
+                        <button class="btn get" onclick="searchStockV3()" style="margin-bottom:8px;">SEARCH</button>
+                        <input type="text" id="cInst" class="code-input" placeholder="Instrument Key" style="margin-bottom:8px;"/>
+                        <input type="text" id="cInc" class="code-input" placeholder="Inc: 02/07/1981" style="margin-bottom:8px;"/>
+                        <select id="cRng" class="code-input" style="margin-bottom:8px;">
+                            <option value="1Y">1Y</option>
+                            <option value="2Y">2Y</option>
+                            <option value="5Y">5Y</option>
+                            <option value="10Y">10Y</option>
+                        </select>
+                        <button class="btn post" onclick="genChartV3()">OPEN CHART</button>
+                        <div style="font-size:9px;color:var(--text-dim);margin-top:8px;">Uses V3 API for data</div>
+                    </div>
+                </details>
+
+                
+            </div>
+
+            <div class="panel-footer">
+                <div class="terminal" id="activityLog">
+                    <div style="color: var(--text-dim);">// System initialized...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flow-connector">→</div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <span>2. Instant API Response</span>
+                <span id="resultCount" style="color: var(--text-dim);">0 Objects</span>
+            </div>
+            <div class="panel-content" style="padding: 0;">
+                <div id="resultsGrid" class="results-grid">
+                    <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-dim); border: 1px dashed var(--border); margin: 20px;">
+                        // Awaiting execution...<br>Data widgets will render here.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <script>
+        const API_KEY = 'c4b13b67-b8f5-490a-ad3b-514da49ad0c0';
+        const API_SECRET = 'pfx2ui3ls6';
+        const REDIRECT_URI = 'https://trader-roan.vercel.app/callback';
+
+        let accessToken = null;
+        let stockResults = [];
+        let instrumentsCache = null;
+        let isCacheLoading = false;
+
+        const INSTRUMENTS = {
+            'NSE_EQ': {
+                'RELIANCE': 'NSE_EQ|INE002A01018', 'TCS': 'NSE_EQ|INE467B01029', 'HDFCBANK': 'NSE_EQ|INE040A01034',
+                'INFY': 'NSE_EQ|INE009A01021', 'ICICIBANK': 'NSE_EQ|INE090A01021', 'HINDUNILVR': 'NSE_EQ|INE030A01027',
+                'ITC': 'NSE_EQ|INE154A01025', 'SBIN': 'NSE_EQ|INE062A01020', 'BHARTIARTL': 'NSE_EQ|INE397D01024',
+                'KOTAKBANK': 'NSE_EQ|INE237A01028', 'BAJFINANCE': 'NSE_EQ|INE296A01024', 'LT': 'NSE_EQ|INE018A01030',
+                'ASIANPAINT': 'NSE_EQ|INE021A01026', 'AXISBANK': 'NSE_EQ|INE238A01034', 'MARUTI': 'NSE_EQ|INE585B01010',
+                'TITAN': 'NSE_EQ|INE280A01028', 'SUNPHARMA': 'NSE_EQ|INE044A01036', 'ULTRACEMCO': 'NSE_EQ|INE481G01011',
+                'NESTLEIND': 'NSE_EQ|INE239A01016', 'WIPRO': 'NSE_EQ|INE075A01022', 'HCLTECH': 'NSE_EQ|INE860A01027',
+                'TECHM': 'NSE_EQ|INE669C01036', 'POWERGRID': 'NSE_EQ|INE752E01010', 'NTPC': 'NSE_EQ|INE733E01010',
+                'BAJAJFINSV': 'NSE_EQ|INE918I01018', 'M&M': 'NSE_EQ|INE101A01026', 'ONGC': 'NSE_EQ|INE213A01029',
+                'TATASTEEL': 'NSE_EQ|INE081A01020', 'ADANIPORTS': 'NSE_EQ|INE742F01042', 'JSWSTEEL': 'NSE_EQ|INE019A01038',
+                'INDUSINDBK': 'NSE_EQ|INE095A01012', 'GRASIM': 'NSE_EQ|INE047A01021', 'TATAMOTORS': 'NSE_EQ|INE155A01022',
+                'DIVISLAB': 'NSE_EQ|INE361B01024', 'DRREDDY': 'NSE_EQ|INE089A01023', 'BRITANNIA': 'NSE_EQ|INE216A01030',
+                'CIPLA': 'NSE_EQ|INE059A01026', 'EICHERMOT': 'NSE_EQ|INE066A01021', 'HINDALCO': 'NSE_EQ|INE038A01020',
+                'BPCL': 'NSE_EQ|INE029A01011', 'COALINDIA': 'NSE_EQ|INE522F01014', 'HEROMOTOCO': 'NSE_EQ|INE158A01026',
+                'UPL': 'NSE_EQ|INE628A01036', 'SHREECEM': 'NSE_EQ|INE070A01015', 'APOLLOHOSP': 'NSE_EQ|INE437A01024',
+                'SBILIFE': 'NSE_EQ|INE123W01016', 'BAJAJ-AUTO': 'NSE_EQ|INE917I01010', 'ADANIENT': 'NSE_EQ|INE423A01024',
+                'HDFCLIFE': 'NSE_EQ|INE795G01014', 'TATACONSUM': 'NSE_EQ|INE192A01025'
+            },
+            'BSE_EQ': {
+                'RELIANCE': 'BSE_EQ|INE002A01018', 'TCS': 'BSE_EQ|INE467B01029', 'HDFCBANK': 'BSE_EQ|INE040A01034',
+                'INFY': 'BSE_EQ|INE009A01021', 'ICICIBANK': 'BSE_EQ|INE090A01021', 'HINDUNILVR': 'BSE_EQ|INE030A01027',
+                'ITC': 'BSE_EQ|INE154A01025', 'SBIN': 'BSE_EQ|INE062A01020', 'BHARTIARTL': 'BSE_EQ|INE397D01024',
+                'KOTAKBANK': 'BSE_EQ|INE237A01028', 'BAJFINANCE': 'BSE_EQ|INE296A01024', 'LT': 'BSE_EQ|INE018A01030',
+                'ASIANPAINT': 'BSE_EQ|INE021A01026', 'AXISBANK': 'BSE_EQ|INE238A01034', 'MARUTI': 'BSE_EQ|INE585B01010',
+                'TITAN': 'BSE_EQ|INE280A01028', 'SUNPHARMA': 'BSE_EQ|INE044A01036', 'ULTRACEMCO': 'BSE_EQ|INE481G01011',
+                'NESTLEIND': 'BSE_EQ|INE239A01016', 'WIPRO': 'BSE_EQ|INE075A01022', 'HCLTECH': 'BSE_EQ|INE860A01027',
+                'TECHM': 'BSE_EQ|INE669C01036', 'POWERGRID': 'BSE_EQ|INE752E01010', 'NTPC': 'BSE_EQ|INE733E01010',
+                'BAJAJFINSV': 'BSE_EQ|INE918I01018', 'M&M': 'BSE_EQ|INE101A01026', 'ONGC': 'BSE_EQ|INE213A01029',
+                'TATASTEEL': 'BSE_EQ|INE081A01020', 'ADANIPORTS': 'BSE_EQ|INE742F01042', 'JSWSTEEL': 'BSE_EQ|INE019A01038',
+                'INDUSINDBK': 'BSE_EQ|INE095A01012', 'GRASIM': 'BSE_EQ|INE047A01021', 'TATAMOTORS': 'BSE_EQ|INE155A01022',
+                'DIVISLAB': 'BSE_EQ|INE361B01024', 'DRREDDY': 'BSE_EQ|INE089A01023', 'BRITANNIA': 'BSE_EQ|INE216A01030',
+                'CIPLA': 'BSE_EQ|INE059A01026', 'EICHERMOT': 'BSE_EQ|INE066A01021', 'HINDALCO': 'BSE_EQ|INE038A01020',
+                'BPCL': 'BSE_EQ|INE029A01011', 'COALINDIA': 'BSE_EQ|INE522F01014', 'HEROMOTOCO': 'BSE_EQ|INE158A01026',
+                'UPL': 'BSE_EQ|INE628A01036', 'SHREECEM': 'BSE_EQ|INE070A01015', 'APOLLOHOSP': 'BSE_EQ|INE437A01024',
+                'SBILIFE': 'BSE_EQ|INE123W01016', 'BAJAJ-AUTO': 'BSE_EQ|INE917I01010', 'ADANIENT': 'BSE_EQ|INE423A01024',
+                'HDFCLIFE': 'BSE_EQ|INE795G01014', 'TATACONSUM': 'BSE_EQ|INE192A01025'
+            }
+        };
+
+        const INCORPORATION_DATES = {
+            'RELIANCE': '08/05/1973', 'TCS': '19/08/1995', 'HDFCBANK': '30/08/1994', 'INFY': '02/07/1981',
+            'ICICIBANK': '05/01/1994', 'HINDUNILVR': '17/11/1933', 'ITC': '24/08/1910', 'SBIN': '01/07/1955',
+            'BHARTIARTL': '07/07/1995', 'KOTAKBANK': '19/11/1985', 'BAJFINANCE': '25/03/1987', 'LT': '07/02/1946',
+            'ASIANPAINT': '01/02/1945', 'AXISBANK': '03/12/1993', 'MARUTI': '24/02/1981', 'TITAN': '03/10/1984',
+            'SUNPHARMA': '01/03/1993', 'ULTRACEMCO': '24/08/2000', 'NESTLEIND': '01/01/1959', 'WIPRO': '29/12/1945',
+            'HCLTECH': '12/11/1991', 'TECHM': '28/06/1986', 'POWERGRID': '23/10/1989', 'NTPC': '07/11/1975',
+            'BAJAJFINSV': '30/04/2007', 'M&M': '12/12/1945', 'ONGC': '14/08/1993', 'TATASTEEL': '26/08/1907',
+            'ADANIPORTS': '31/03/1998', 'JSWSTEEL': '23/03/1994', 'INDUSINDBK': '01/04/1994', 'GRASIM': '25/08/1947',
+            'TATAMOTORS': '01/09/1945', 'DIVISLAB': '14/03/1990', 'DRREDDY': '12/04/1984', 'BRITANNIA': '01/01/1918',
+            'CIPLA': '01/01/1935', 'EICHERMOT': '03/08/1982', 'HINDALCO': '19/03/1958', 'BPCL': '20/10/1952',
+            'COALINDIA': '01/11/1973', 'HEROMOTOCO': '19/01/1984', 'UPL': '07/02/1969', 'SHREECEM': '01/04/1979',
+            'APOLLOHOSP': '18/10/1979', 'SBILIFE': '11/10/2000', 'BAJAJ-AUTO': '29/11/2007', 'ADANIENT': '19/05/1993',
+            'HDFCLIFE': '14/08/2000', 'TATACONSUM': '01/01/1962'
+        };
+
+        const COMPANY_FULL_NAMES = {
+            'RELIANCE': 'Reliance Industries Limited', 'TCS': 'Tata Consultancy Services Limited',
+            'HDFCBANK': 'HDFC Bank Limited', 'INFY': 'Infosys Limited',
+            'ICICIBANK': 'ICICI Bank Limited', 'HINDUNILVR': 'Hindustan Unilever Limited',
+            'ITC': 'ITC Limited', 'SBIN': 'State Bank of India', 'BHARTIARTL': 'Bharti Airtel Limited',
+            'KOTAKBANK': 'Kotak Mahindra Bank Limited', 'BAJFINANCE': 'Bajaj Finance Limited',
+            'LT': 'Larsen & Toubro Limited', 'ASIANPAINT': 'Asian Paints Limited',
+            'AXISBANK': 'Axis Bank Limited', 'MARUTI': 'Maruti Suzuki India Limited',
+            'TITAN': 'Titan Company Limited', 'SUNPHARMA': 'Sun Pharmaceutical Industries Limited',
+            'ULTRACEMCO': 'UltraTech Cement Limited', 'NESTLEIND': 'Nestle India Limited',
+            'WIPRO': 'Wipro Limited', 'HCLTECH': 'HCL Technologies Limited',
+            'TECHM': 'Tech Mahindra Limited', 'POWERGRID': 'Power Grid Corporation of India Limited',
+            'NTPC': 'NTPC Limited', 'BAJAJFINSV': 'Bajaj Finserv Limited',
+            'M&M': 'Mahindra & Mahindra Limited', 'ONGC': 'Oil and Natural Gas Corporation Limited',
+            'TATASTEEL': 'Tata Steel Limited', 'ADANIPORTS': 'Adani Ports and Special Economic Zone Limited',
+            'JSWSTEEL': 'JSW Steel Limited', 'INDUSINDBK': 'IndusInd Bank Limited',
+            'GRASIM': 'Grasim Industries Limited', 'TATAMOTORS': 'Tata Motors Limited',
+            'DIVISLAB': 'Divi\'s Laboratories Limited', 'DRREDDY': 'Dr. Reddy\'s Laboratories Limited',
+            'BRITANNIA': 'Britannia Industries Limited', 'CIPLA': 'Cipla Limited',
+            'EICHERMOT': 'Eicher Motors Limited', 'HINDALCO': 'Hindalco Industries Limited',
+            'BPCL': 'Bharat Petroleum Corporation Limited', 'COALINDIA': 'Coal India Limited',
+            'HEROMOTOCO': 'Hero MotoCorp Limited', 'UPL': 'UPL Limited',
+            'SHREECEM': 'Shree Cement Limited', 'APOLLOHOSP': 'Apollo Hospitals Enterprise Limited',
+            'SBILIFE': 'SBI Life Insurance Company Limited', 'BAJAJ-AUTO': 'Bajaj Auto Limited',
+            'ADANIENT': 'Adani Enterprises Limited', 'HDFCLIFE': 'HDFC Life Insurance Company Limited',
+            'TATACONSUM': 'Tata Consumer Products Limited'
+        };
+
+        const top50Stocks = Object.keys(INSTRUMENTS.NSE_EQ);
+
+        // --- FUNCTIONS ---
+
+        async function loadInstrumentsCache() {
+            if (instrumentsCache) return instrumentsCache;
+            if (isCacheLoading) {
+                while (isCacheLoading) { await new Promise(resolve => setTimeout(resolve, 100)); }
+                return instrumentsCache;
+            }
+            isCacheLoading = true;
+            try {
+                log('📥 Downloading complete instruments database from Upstox...');
+                const response = await fetch('https://assets.upstox.com/market-quote/instruments/exchange/complete.json.gz');
+                if (!response.ok) throw new Error('Failed to fetch instruments file');
+                const arrayBuffer = await response.arrayBuffer();
+                const decompressed = pako.ungzip(new Uint8Array(arrayBuffer), { to: 'string' });
+                const instruments = JSON.parse(decompressed);
+                instrumentsCache = {};
+                instruments.forEach(instrument => {
+                    if (instrument.trading_symbol && instrument.name) {
+                        const symbol = instrument.trading_symbol.toUpperCase();
+                        if (instrument.instrument_type === 'EQ') {
+                            instrumentsCache[symbol] = {
+                                name: instrument.name,
+                                instrumentKey: instrument.instrument_key,
+                                exchange: instrument.exchange
+                            };
+                        }
+                    }
+                });
+                log(`✓ Loaded ${Object.keys(instrumentsCache).length} equity instruments from Upstox`);
+                isCacheLoading = false;
+                return instrumentsCache;
+            } catch (error) {
+                log(`✗ Error loading instruments: ${error.message}. Using fallback list.`);
+                isCacheLoading = false;
+                instrumentsCache = {};
+                return instrumentsCache;
+            }
+        }
+
+        async function getFullCompanyName(symbol) {
+            if (COMPANY_FULL_NAMES[symbol.toUpperCase()]) return COMPANY_FULL_NAMES[symbol.toUpperCase()];
+            const cache = await loadInstrumentsCache();
+            if (cache && cache[symbol.toUpperCase()]) return cache[symbol.toUpperCase()].name;
+            log(`⚠ Company name not found for ${symbol}, using symbol as name`);
+            return symbol;
+        }
+
+        function log(message) {
+            const logDiv = document.getElementById('activityLog');
+            const timestamp = new Date().toLocaleTimeString('en-IN');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('authStatus');
+            statusDiv.textContent = message;
+            statusDiv.style.color = type === 'error' ? 'var(--error-text)' : 'var(--text-dim)';
+        }
+
+        function updateConnectionStatus(connected) {
+            const dot = document.getElementById('connectionDot');
+            const text = document.getElementById('connectionText');
+            if (connected) {
+                dot.classList.add('connected');
+                text.textContent = 'Connected';
+                text.style.color = 'var(--success-text)';
+            } else {
+                dot.classList.remove('connected');
+                text.textContent = 'Disconnected';
+            }
+        }
+
+        function toggleDataMode() {
+            const mode = document.getElementById('dataMode').value;
+            document.getElementById('manualEntry').style.display = mode === 'manual' ? 'flex' : 'none';
+        }
+
+        async function getStockList() {
+            const mode = document.getElementById('dataMode').value;
+            if (mode === 'top50') return top50Stocks;
+            if (mode.includes('weekly') || mode.includes('monthly')) return await getTopMovers(mode);
+            const symbols = document.getElementById('symbols').value;
+            return symbols.split(',').map(s => s.trim().toUpperCase()).filter(s => s);
+        }
+
+        async function getTopMovers(mode) {
+            if (!accessToken) {
+                showStatus('❌ Please authenticate first', 'error');
+                return [];
+            }
+            const isWeekly = mode.includes('weekly');
+            const isGainer = mode.includes('Gainers');
+            const exchange = document.getElementById('exchange').value;
+            log(`Fetching ${mode}... This may take a moment.`);
+            const toDate = new Date().toISOString().split('T')[0];
+            const fromDate = new Date(Date.now() - (isWeekly ? 7 : 30) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            const results = [];
+            for (const symbol of top50Stocks) {
+                try {
+                    const instrumentKey = INSTRUMENTS[exchange]?.[symbol];
+                    if (!instrumentKey) continue;
+                    const url = `https://api.upstox.com/v3/historical-candle/${encodeURIComponent(instrumentKey)}/days/1/${toDate}/${fromDate}`;
+                    const response = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' } });
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.data && data.data.candles && data.data.candles.length > 0) {
+                            const candles = data.data.candles;
+                            const latestPrice = candles[0][4];
+                            const oldestPrice = candles[candles.length - 1][4];
+                            const percentChange = ((latestPrice - oldestPrice) / oldestPrice * 100).toFixed(2);
+                            results.push({ symbol, percentChange: parseFloat(percentChange) });
+                        }
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 300)); // Rate Limit Protection (300ms)
+                } catch (error) { continue; }
+            }
+            results.sort((a, b) => isGainer ? b.percentChange - a.percentChange : a.percentChange - b.percentChange);
+            const topMovers = results.slice(0, 50).map(r => r.symbol);
+            log(`✓ Found ${topMovers.length} ${mode}`);
+            return topMovers;
+        }
+
+        function getIncorporationDate(symbol) {
+            return INCORPORATION_DATES[symbol.toUpperCase()] || 'Not Available';
+        }
+
+        async function authenticateUpstox() {
+            const authUrl = `https://api.upstox.com/v2/login/authorization/dialog?response_type=code&client_id=${API_KEY}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+            log('Opening Upstox authorization page...');
+            window.open(authUrl, '_blank', 'width=600,height=700');
+            showStatus('Waiting for authorization code...', 'info');
+            const authCode = prompt('Paste the authorization code from the redirect URL:');
+            if (!authCode) {
+                showStatus('Authorization cancelled', 'error');
+                return;
+            }
+            await exchangeCodeForToken(authCode);
+        }
+
+        async function exchangeCodeForToken(authCode) {
+            try {
+                log('Exchanging authorization code for access token...');
+                const response = await fetch('https://api.upstox.com/v2/login/authorization/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+                    body: new URLSearchParams({
+                        'code': authCode, 'client_id': API_KEY, 'client_secret': API_SECRET,
+                        'redirect_uri': REDIRECT_URI, 'grant_type': 'authorization_code'
+                    })
+                });
+                const data = await response.json();
+                if (response.ok && data.access_token) {
+                    accessToken = data.access_token;
+                    showStatus('✓ Authenticated', 'success');
+                    updateConnectionStatus(true);
+                    log('✓ Access token obtained');
+                } else {
+                    throw new Error(data.message || 'Failed to get access token');
+                }
+            } catch (error) {
+                showStatus(`✗ Error: ${error.message}`, 'error');
+                log(`✗ Authentication error: ${error.message}`);
+                updateConnectionStatus(false);
+            }
+        }
+
+        async function fetchStockData() {
+            if (!accessToken) {
+                showStatus('❌ Please authenticate first', 'error');
+                return;
+            }
+            const stocks = await getStockList();
+            if (stocks.length === 0) {
+                showStatus('❌ Please enter stock symbols', 'error');
+                return;
+            }
+
+            await loadInstrumentsCache();
+
+            const exchange = document.getElementById('exchange').value;
+            const interval = document.getElementById('interval').value;
+            
+            // NEW: Handle MAX History Logic
+            let fromDate;
+            if (document.getElementById('timePeriod').value === 'max') {
+                if (interval.includes('minute') || interval.includes('hour')) {
+                    fromDate = '2022-01-01'; // Upstox Intraday limit
+                } else {
+                    fromDate = '2008-01-01'; // Upstox Historical limit (actual)
+                }
+                log(`Processing Full History since ${fromDate}...`);
+            } else {
+                const months = parseInt(document.getElementById('timePeriod').value);
+                fromDate = new Date(Date.now() - months * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            }
+
+            const toDate = new Date().toISOString().split('T')[0];
+
+            log(`Fetching data for ${stocks.length} stocks...`);
+            document.getElementById('progress').style.display = 'block';
+            stockResults = [];
+            const grid = document.getElementById('resultsGrid');
+            grid.innerHTML = '';
+
+            for (let i = 0; i < stocks.length; i++) {
+                const symbol = stocks[i];
+                const progress = ((i + 1) / stocks.length) * 100;
+                document.getElementById('progressFill').style.width = `${progress}%`;
+                document.getElementById('progressText').textContent = `Processing ${symbol} (${i + 1}/${stocks.length})`;
+
+                try {
+                    const instrumentKey = INSTRUMENTS[exchange]?.[symbol];
+                    if (!instrumentKey) {
+                        log(`✗ ${symbol}: Not found in instrument list`);
+                        continue;
+                    }
+
+                    const url = `https://api.upstox.com/v3/historical-candle/${encodeURIComponent(instrumentKey)}/${interval}/${toDate}/${fromDate}`;
+                    const response = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' } });
+
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const data = await response.json();
+
+                    if (data.data && data.data.candles && data.data.candles.length > 0) {
+                        const candles = data.data.candles;
+                        const latestPrice = candles[0][4];
+                        const oldestPrice = candles[candles.length - 1][4];
+                        const highPrice = Math.max(...candles.map(c => c[2]));
+                        const lowPrice = Math.min(...candles.map(c => c[3]));
+                        const priceChange = latestPrice - oldestPrice;
+                        const percentChange = ((priceChange / oldestPrice) * 100).toFixed(2);
+
+                        let monthlyData = [];
+                        if (interval === 'months/1') {
+                            monthlyData = candles.map(candle => ({
+                                date: new Date(candle[0]).toLocaleDateString('en-IN', { year: 'numeric', month: 'short' }),
+                                open: candle[1].toFixed(2),
+                                close: candle[4].toFixed(2),
+                                high: candle[2].toFixed(2),
+                                low: candle[3].toFixed(2),
+                                change: ((candle[4] - candle[1]) / candle[1] * 100).toFixed(2)
+                            })).reverse();
+                        }
+
+                        const fullCompanyName = await getFullCompanyName(symbol);
+
+                        const stockObj = {
+                            symbol,
+                            companyName: fullCompanyName,
+                            incorporationDate: getIncorporationDate(symbol),
+                            latestPrice: latestPrice.toFixed(2),
+                            oldestPrice: oldestPrice.toFixed(2),
+                            highPrice: highPrice.toFixed(2),
+                            lowPrice: lowPrice.toFixed(2),
+                            change: priceChange.toFixed(2),
+                            percentChange,
+                            dataPoints: candles.length,
+                            monthlyData
+                        };
+                        
+                        stockResults.push(stockObj);
+                        renderCard(stockObj);
+                        document.getElementById('resultCount').innerText = `${stockResults.length} Objects`;
+                        log(`✓ ${symbol}: ${percentChange}%`);
+                    } else {
+                        log(`✗ ${symbol}: No data`);
+                    }
+                } catch (error) {
+                    log(`✗ ${symbol}: ${error.message}`);
+                }
+                await new Promise(resolve => setTimeout(resolve, 250));
+            }
+
+            document.getElementById('progress').style.display = 'none';
+            document.getElementById('progressText').textContent = '';
+            document.getElementById('exportBtn').classList.remove('hidden');
+            log(`✓ Completed: ${stockResults.length} stocks analyzed`);
+        }
+
+        function renderCard(stock) {
+            const grid = document.getElementById('resultsGrid');
+            const changeClass = parseFloat(stock.percentChange) >= 0 ? 'pos' : 'neg';
+            
+            let monthlyTable = '';
+            if (stock.monthlyData && stock.monthlyData.length > 0) {
+                monthlyTable = `
+                    <table class="mini-table">
+                        ${stock.monthlyData.slice(0, 5).map(m => `
+                            <tr>
+                                <td>${m.date}</td>
+                                <td>₹${m.close}</td>
+                                <td style="color: ${parseFloat(m.change) >= 0 ? 'var(--success-text)' : 'var(--error-text)'}">${m.change}%</td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                `;
+            }
+
+            const card = document.createElement('div');
+            card.className = 'tech-card';
+            card.innerHTML = `
+                <div class="card-top">
+                    <div>
+                        <span class="symbol-title">${stock.symbol}</span>
+                        <span class="company-name">${stock.companyName}</span>
+                    </div>
+                    <span class="badge ${changeClass}">${stock.percentChange}%</span>
+                </div>
+                <div class="card-metrics">
+                    <div><span class="metric-label">INCORP</span><span class="metric-val">${stock.incorporationDate}</span></div>
+                    <div><span class="metric-label">PRICE</span><span class="metric-val">₹${stock.latestPrice}</span></div>
+                    <div><span class="metric-label">HIGH</span><span class="metric-val">₹${stock.highPrice}</span></div>
+                    <div><span class="metric-label">LOW</span><span class="metric-val">₹${stock.lowPrice}</span></div>
+                </div>
+                ${monthlyTable}
+            `;
+            grid.appendChild(card);
+        }
+
+        function exportToCSV() {
+            if (stockResults.length === 0) {
+                showStatus('❌ No data to export', 'error');
+                return;
+            }
+
+            let csv = 'Company Name,Incorporation Date,Current Price,Period High,Period Low,Change,Change %,Data Points\n';
+
+            stockResults.forEach(stock => {
+                csv += `"${stock.companyName}",${stock.incorporationDate},${stock.latestPrice},${stock.highPrice},${stock.lowPrice},${stock.change},${stock.percentChange},${stock.dataPoints}\n`;
+                
+                if (stock.monthlyData && stock.monthlyData.length > 0) {
+                    csv += `\nMonthly Breakdown for ${stock.companyName}:\n`;
+                    csv += `Date,Open,Close,High,Low,Change %\n`;
+                    stock.monthlyData.forEach(m => {
+                        csv += `${m.date},${m.open},${m.close},${m.high},${m.low},${m.change}\n`;
+                    });
+                    csv += `\n`;
+                }
+            });
+
+            downloadCSV(csv, `stocks_complete_${new Date().toISOString().split('T')[0]}.csv`);
+            log('✓ CSV exported');
+        }
+
+        function downloadCSV(csvContent, fileName) {
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        function toggleTheme() {
+            const body = document.body;
+            const currentTheme = body.getAttribute('data-theme');
+            if (currentTheme === 'dark') {
+                body.setAttribute('data-theme', 'light');
+                log('Switched to light theme');
+            } else {
+                body.setAttribute('data-theme', 'dark');
+                log('Switched to dark theme');
+            }
+        }
+
+        // =========================================================
+        // NEW DATE UPDATE LOGIC (STRICT PRESERVATION MODE)
+        // =========================================================
+
+        async function processDateUpdate() {
+            const stockInput = document.getElementById('stocksFile');
+            const teInput = document.getElementById('teFile');
+
+            if (!stockInput.files[0] || !teInput.files[0]) {
+                log('❌ Please upload both files first.');
+                return;
+            }
+
+            log('== STARTING PRESERVATION PATCH ==');
+            
+            try {
+                // Read files as RAW TEXT
+                const stockContent = await readFile(stockInput.files[0]);
+                const teContent = await readFile(teInput.files[0]);
+
+                // Parse TE File (Source of Truth) normally to build the map
+                const teData = parseCSV(teContent); // Helper to get data object
+                if (!teData.length) throw new Error("TE File empty");
+
+                const teHeaders = Object.keys(teData[0]);
+                let companyCol, dateCol;
+
+                // Dynamic Column Detection (Same as before)
+                for (const col of teHeaders) {
+                    const up = col.toUpperCase();
+                    if (up.includes('COMPANY') && up.includes('NAME')) companyCol = col;
+                    else if (up.includes('DATE') && (up.includes('REGISTRATION') || up.includes('INCORPORATION'))) dateCol = col;
+                }
+                if (!companyCol || !dateCol) {
+                    if (teHeaders.length >= 3) { companyCol = teHeaders[1]; dateCol = teHeaders[2]; }
+                    else if (teHeaders.length >= 2) { companyCol = teHeaders[0]; dateCol = teHeaders[1]; }
+                }
+
+                // Build Map
+                const teMap = new Map();
+                teData.forEach(row => {
+                    if (row[companyCol]) teMap.set(row[companyCol].trim().toUpperCase(), row[dateCol]);
+                });
+                log(`✓ Indexed ${teMap.size} companies.`);
+
+                // === LINE BY LINE PROCESSING FOR STOCKS FILE ===
+                // This ensures we keep footers, blank lines, and custom text exactly as is.
+                
+                const lines = stockContent.split(/\r?\n/);
+                const outputLines = [];
+                let headerFound = false;
+                let nameIdx = -1;
+                let dateIdx = -1;
+                let updates = 0;
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    
+                    // 1. If header not found yet, check this line
+                    if (!headerFound) {
+                        if (line.includes('Company Name') && line.includes('Incorporation Date')) {
+                            headerFound = true;
+                            // Parse header to find indices
+                            const cols = parseLine(line);
+                            nameIdx = cols.indexOf('Company Name');
+                            dateIdx = cols.indexOf('Incorporation Date');
+                            outputLines.push(line);
+                            continue; 
+                        }
+                        outputLines.push(line); // Keep pre-header text if any
+                        continue;
+                    }
+
+                    // 2. If we are in the data section
+                    // We simply check if the line *looks* like a table row
+                    // (Has enough columns and first col matches quoted string pattern)
+                    
+                    const cols = parseLine(line);
+                    
+                    // Heuristic: A valid row has at least enough columns and specific indices exist
+                    if (cols.length > Math.max(nameIdx, dateIdx) && cols[nameIdx]) {
+                        const companyName = cols[nameIdx].trim().toUpperCase();
+                        
+                        if (teMap.has(companyName)) {
+                            // FOUND MATCH -> UPDATE DATE
+                            let newDate = teMap.get(companyName);
+                            
+                            // Format Date if needed
+                            if (/^\d{4}-\d{2}-\d{2}/.test(newDate)) {
+                                const [y, m, d] = newDate.split('T')[0].split('-');
+                                newDate = `${d}/${m}/${y}`;
+                            }
+
+                            // Update the specific column
+                            cols[dateIdx] = newDate;
+                            updates++;
+
+                            // Reconstruct Line: Quote values if they contain commas
+                            const newLine = cols.map(val => {
+                                // If it was originally quoted (or needs quotes), wrap it
+                                if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+                                    // Simple quote escape
+                                    return `"${val.replace(/"/g, '""')}"`;
+                                }
+                                return val;
+                            }).join(',');
+                            
+                            outputLines.push(newLine);
+                        } else {
+                            // No match, keep line exactly as is (safer than reconstructing)
+                            outputLines.push(line);
+                        }
+                    } else {
+                        // This is likely a "Monthly Breakdown" line, empty line, or footer
+                        // KEEP EXACTLY AS IS
+                        outputLines.push(line);
+                    }
+                }
+
+                log(`✓ Patched ${updates} rows. Preserved all other data.`);
+                downloadCSV(outputLines.join('\n'), 'stocks_updated.csv');
+
+            } catch (e) {
+                log(`❌ Error: ${e.message}`);
+                console.error(e);
+            }
+        }
+
+        function readFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = e => reject(e);
+                reader.readAsText(file);
+            });
+        }
+
+        // Helper to split a CSV line respecting quotes
+        function parseLine(text) {
+            const matches = [];
+            const re = /(?!\s*$)\s*(?:'([^']*)'|"([^"]*)"|([^,'"\s\\]*(?:\s+[^,'"\s\\]+)*))\s*(?:,|$)/g;
+            let match;
+            while ((match = re.exec(text)) !== null) {
+                if (match[2] !== undefined) matches.push(match[2]);
+                else if (match[1] !== undefined) matches.push(match[1]);
+                else if (match[3] !== undefined) matches.push(match[3]);
+                else matches.push('');
+            }
+            return matches;
+        }
+
+        // Helper for the TE file parsing (returns objects)
+        function parseCSV(text) {
+            const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+            if (lines.length === 0) return [];
+            const headers = parseLine(lines[0]);
+            const result = [];
+            for (let i = 1; i < lines.length; i++) {
+                const currentline = parseLine(lines[i]);
+                if (currentline.length >= headers.length) {
+                    const obj = {};
+                    for (let j = 0; j < headers.length; j++) {
+                        obj[headers[j]] = currentline[j];
+                    }
+                    result.push(obj);
+                }
+            }
+            return result;
+        }
+
+
+        // =========================================================
+        // NUMEROLOGY + CHINESE ZODIAC FUNCTIONS
+        // =========================================================
+
+        const CHINESE_NEW_YEAR_DATES = {
+            1930: '01-30', 1931: '02-17', 1932: '02-06', 1933: '01-26', 1934: '02-14',
+            1935: '02-04', 1936: '01-24', 1937: '02-11', 1938: '01-31', 1939: '02-19',
+            1940: '02-08', 1941: '01-27', 1942: '02-15', 1943: '02-05', 1944: '01-25',
+            1945: '02-13', 1946: '02-02', 1947: '01-22', 1948: '02-10', 1949: '01-29',
+            1950: '02-17', 1951: '02-06', 1952: '01-27', 1953: '02-14', 1954: '02-03',
+            1955: '01-24', 1956: '02-12', 1957: '01-31', 1958: '02-18', 1959: '02-08',
+            1960: '01-28', 1961: '02-15', 1962: '02-05', 1963: '01-25', 1964: '02-13',
+            1965: '02-02', 1966: '01-21', 1967: '02-09', 1968: '01-30', 1969: '02-17',
+            1970: '02-06', 1971: '01-27', 1972: '02-15', 1973: '02-03', 1974: '01-23',
+            1975: '02-11', 1976: '01-31', 1977: '02-18', 1978: '02-07', 1979: '01-28',
+            1980: '02-16', 1981: '02-05', 1982: '01-25', 1983: '02-13', 1984: '02-02',
+            1985: '02-20', 1986: '02-09', 1987: '01-29', 1988: '02-17', 1989: '02-06',
+            1990: '01-27', 1991: '02-15', 1992: '02-04', 1993: '01-23', 1994: '02-10',
+            1995: '01-31', 1996: '02-19', 1997: '02-07', 1998: '01-28', 1999: '02-16',
+            2000: '02-05', 2001: '01-24', 2002: '02-12', 2003: '02-01', 2004: '01-22',
+            2005: '02-09', 2006: '01-29', 2007: '02-18', 2008: '02-07', 2009: '01-26',
+            2010: '02-14', 2011: '02-03', 2012: '01-23', 2013: '02-10', 2014: '01-31',
+            2015: '02-19', 2016: '02-08', 2017: '01-28', 2018: '02-16', 2019: '02-05',
+            2020: '01-25', 2021: '02-12', 2022: '02-01', 2023: '01-22', 2024: '02-10',
+            2025: '01-29', 2026: '02-17', 2027: '02-06', 2028: '01-26', 2029: '02-13', 2030: '02-03'
+        };
+
+        const CHINESE_ZODIAC_ANIMALS = ['Rat', 'Ox', 'Tiger', 'Rabbit', 'Dragon', 'Snake', 'Horse', 'Goat', 'Monkey', 'Rooster', 'Dog', 'Pig'];
+
+        function getChineseZodiac(dateStr) {
+            const parts = dateStr.includes('/') ? dateStr.split('/') : dateStr.split('-');
+            const day = parseInt(parts[0]), month = parseInt(parts[1]), year = parseInt(parts[2]);
+            let chineseYear = year;
+            if (CHINESE_NEW_YEAR_DATES[year]) {
+                const cnyParts = CHINESE_NEW_YEAR_DATES[year].split('-');
+                const cnyMonth = parseInt(cnyParts[0]), cnyDay = parseInt(cnyParts[1]);
+                if (month < cnyMonth || (month === cnyMonth && day < cnyDay)) chineseYear = year - 1;
+            }
+            return CHINESE_ZODIAC_ANIMALS[(chineseYear - 1924) % 12];
+        }
+
+        function getChineseZodiacForMonthYear(monthYear) {
+            monthYear = normalizeMonthYear(monthYear);
+            const parts = monthYear.split(' ');
+            const monthMap = {'Jan':1,'January':1,'Feb':2,'February':2,'Mar':3,'March':3,'Apr':4,'April':4,'May':5,'Jun':6,'June':6,'Jul':7,'July':7,'Aug':8,'August':8,'Sep':9,'Sept':9,'September':9,'Oct':10,'October':10,'Nov':11,'November':11,'Dec':12,'December':12};
+            const month = monthMap[parts[0]], year = parseInt(parts[1]);
+            return getChineseZodiac(`15/${month.toString().padStart(2,'0')}/${year}`);
+        }
+
+        function calculateLifePath(dateStr) {
+            const parts = dateStr.includes('/') ? dateStr.split('/') : dateStr.split('-');
+            let total = parseInt(parts[0]) + parseInt(parts[1]);
+            for (const digit of parts[2].toString()) total += parseInt(digit);
+            const masterNumbers = [11,22,28,33,20];
+            if (masterNumbers.includes(total)) return total;
+            while (total > 9) {
+                total = total.toString().split('').reduce((sum,d) => sum + parseInt(d), 0);
+                if (masterNumbers.includes(total)) return total;
+            }
+            return total;
+        }
+
+        function normalizeMonthYear(dateStr) {
+            if (dateStr.includes('-')) {
+                const parts = dateStr.split('-');
+                let year = parts[1];
+                if (year.length === 2) year = parseInt(year) < 50 ? '20' + year : '19' + year;
+                return parts[0] + ' ' + year;
+            }
+            return dateStr;
+        }
+
+        function calculatePersonalYear(incorporationDateStr, targetMonthYear) {
+            targetMonthYear = normalizeMonthYear(targetMonthYear);
+            const incParts = incorporationDateStr.includes('/') ? incorporationDateStr.split('/') : incorporationDateStr.split('-');
+            const birthDay = parseInt(incParts[0]), birthMonth = parseInt(incParts[1]);
+            const monthMap = {'Jan':1,'January':1,'Feb':2,'February':2,'Mar':3,'March':3,'Apr':4,'April':4,'May':5,'Jun':6,'June':6,'Jul':7,'July':7,'Aug':8,'August':8,'Sep':9,'Sept':9,'September':9,'Oct':10,'October':10,'Nov':11,'November':11,'Dec':12,'December':12};
+            const targetParts = targetMonthYear.split(' ');
+            const targetMonth = monthMap[targetParts[0]], targetYear = parseInt(targetParts[1]);
+            const yearToUse = targetMonth >= birthMonth ? targetYear : targetYear - 1;
+            let total = birthDay + birthMonth;
+            for (const digit of yearToUse.toString()) total += parseInt(digit);
+            const masterNumbers = [11,22,28,33,20];
+            if (masterNumbers.includes(total)) return total;
+            while (total > 9) {
+                total = total.toString().split('').reduce((sum,d) => sum + parseInt(d), 0);
+                if (masterNumbers.includes(total)) return total;
+            }
+            return total;
+        }
+
+        function calculatePersonalMonth(incorporationDateStr, targetMonthYear) {
+            targetMonthYear = normalizeMonthYear(targetMonthYear);
+            const incParts = incorporationDateStr.includes('/') ? incorporationDateStr.split('/') : incorporationDateStr.split('-');
+            const birthDay = parseInt(incParts[0]), birthMonth = parseInt(incParts[1]);
+            const monthMap = {'Jan':1,'January':1,'Feb':2,'February':2,'Mar':3,'March':3,'Apr':4,'April':4,'May':5,'Jun':6,'June':6,'Jul':7,'July':7,'Aug':8,'August':8,'Sep':9,'Sept':9,'September':9,'Oct':10,'October':10,'Nov':11,'November':11,'Dec':12,'December':12};
+            const targetParts = targetMonthYear.split(' ');
+            const targetMonth = monthMap[targetParts[0]], targetYear = parseInt(targetParts[1]);
+            const yearToUse = targetMonth >= birthMonth ? targetYear : targetYear - 1;
+            let total = birthDay + birthMonth + targetMonth;
+            for (const digit of yearToUse.toString()) total += parseInt(digit);
+            const masterNumbers = [11,22,28,33,20];
+            if (masterNumbers.includes(total)) return total;
+            while (total > 9) {
+                total = total.toString().split('').reduce((sum,d) => sum + parseInt(d), 0);
+                if (masterNumbers.includes(total)) return total;
+            }
+            return total;
+        }
+
+        function parseStockCSV(csvContent) {
+            const lines = csvContent.split('\n').map(l => l.trim()).filter(l => l);
+            const stocks = [];
+            let currentStock = null, currentIncDate = null, monthlyData = [];
+            const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (line.startsWith('Company Name') || line.startsWith('Monthly Breakdown') || line.startsWith('Date,Open,Close')) continue;
+                const parts = line.split(',');
+                if (parts.length >= 2 && (parts[1].includes('/') || parts[1].includes('-')) && (parts[1].split('/').length === 3 || parts[1].split('-').length === 3)) {
+                    if (currentStock && monthlyData.length > 0) stocks.push({stock: currentStock, incorporationDate: currentIncDate, monthlyData: [...monthlyData]});
+                    currentStock = parts[0].trim();
+                    currentIncDate = parts[1].trim();
+                    monthlyData = [];
+                } else if (parts.length >= 5 && monthNames.some(m => parts[0].startsWith(m))) {
+                    monthlyData.push({date: parts[0].trim(), open: parts[1].trim()||'', close: parts[2].trim()||'', high: parts[3].trim()||'', low: parts[4].trim()||'', changePct: parts[5]?parts[5].trim():''});
+                }
+            }
+            if (currentStock && monthlyData.length > 0) stocks.push({stock: currentStock, incorporationDate: currentIncDate, monthlyData: [...monthlyData]});
+            return stocks;
+        }
+
+        async function processNumerology() {
+            const fileInput = document.getElementById('numerologyFile');
+            if (!fileInput.files[0]) { log('❌ Please upload a stock CSV file first.'); return; }
+            log('== STARTING NUMEROLOGY + CHINESE ZODIAC CALCULATION ==');
+            try {
+                const fileContent = await readFile(fileInput.files[0]);
+                const stocks = parseStockCSV(fileContent);
+                if (!stocks.length) throw new Error('No stock data found in CSV');
+                log(`✓ Found ${stocks.length} stocks in CSV`);
+                const outputRows = [];
+                let totalMonths = 0;
+                for (const stockData of stocks) {
+                    const {stock, incorporationDate, monthlyData} = stockData;
+                    if (!incorporationDate || incorporationDate === 'Not Available') { log(`⚠ Skipped ${stock}: No incorporation date`); continue; }
+                    const lifePathNum = calculateLifePath(incorporationDate);
+                    const companyZodiac = getChineseZodiac(incorporationDate);
+                    log(`Processing ${stock} (LP: ${lifePathNum}, Zodiac: ${companyZodiac}) - ${monthlyData.length} months`);
+                    for (const monthRow of monthlyData) {
+                        try {
+                            const personalYearNum = calculatePersonalYear(incorporationDate, monthRow.date);
+                            const personalMonthNum = calculatePersonalMonth(incorporationDate, monthRow.date);
+                            const monthZodiac = getChineseZodiacForMonthYear(monthRow.date);
+                            outputRows.push({'Stock': stock, 'Incorporation_Date': incorporationDate, 'Company_Chinese_Zodiac': companyZodiac, 'Life_Path': lifePathNum, 'Month_Year': normalizeMonthYear(monthRow.date), 'Month_Chinese_Zodiac': monthZodiac, 'Personal_Year': personalYearNum, 'Personal_Month': personalMonthNum, 'Open': monthRow.open, 'Close': monthRow.close, 'High': monthRow.high, 'Low': monthRow.low, 'Change_%': monthRow.changePct});
+                            totalMonths++;
+                        } catch (e) { log(`⚠ Error processing ${stock} ${monthRow.date}: ${e.message}`); }
+                    }
+                }
+                log(`✓ Calculated numerology + zodiac for ${totalMonths} total month records`);
+                const outputHeaders = ['Stock','Incorporation_Date','Company_Chinese_Zodiac','Life_Path','Month_Year','Month_Chinese_Zodiac','Personal_Year','Personal_Month','Open','Close','High','Low','Change_%'];
+                let csvOutput = outputHeaders.join(',') + '\n';
+                for (const row of outputRows) {
+                    const rowValues = outputHeaders.map(header => {
+                        const val = row[header] || '';
+                        return val.toString().includes(',') ? `"${val}"` : val;
+                    });
+                    csvOutput += rowValues.join(',') + '\n';
+                }
+                const timestamp = new Date().toISOString().split('T')[0];
+                downloadCSV(csvOutput, `stocks_numerology_zodiac_${timestamp}.csv`);
+                log(`✓ Downloaded: stocks_numerology_zodiac_${timestamp}.csv`);
+            } catch (e) { log(`❌ Error: ${e.message}`); console.error(e); }
+        }
+
+        async function analyzeMLPatterns() {
+            const fileInput = document.getElementById('mlFile');
+            if (!fileInput.files[0]) { log('❌ Please upload a numerology CSV file first.'); return; }
+            log('== STARTING ML PATTERN ANALYSIS (BY COMPANY) ==');
+            try {
+                const fileContent = await readFile(fileInput.files[0]);
+                const csvData = parseCSV(fileContent);
+                if (!csvData.length) throw new Error('CSV file is empty');
+                log(`✓ Loaded ${csvData.length} rows from CSV`);
+                const analysisColumns = ['Life_Path','Personal_Year','Personal_Month','Company_Chinese_Zodiac','Month_Chinese_Zodiac'];
+                const companiesData = {};
+                for (const row of csvData) {
+                    const company = row['Stock'] || 'Unknown';
+                    if (!companiesData[company]) companiesData[company] = [];
+                    companiesData[company].push(row);
+                }
+                const companies = Object.keys(companiesData);
+                log(`✓ Found ${companies.length} companies`);
+                let csvOutput = '';
+                const outputHeaders = ['Category','Value','Occurrences','Percentage','Pattern_Strength'];
+                for (const company of companies) {
+                    log(`\nAnalyzing: ${company} (${companiesData[company].length} records)`);
+                    const companyRows = companiesData[company];
+                    const patterns = {};
+                    for (const col of analysisColumns) {
+                        patterns[col] = {};
+                        for (const row of companyRows) {
+                            const value = row[col];
+                            if (value && value !== '') patterns[col][value] = (patterns[col][value] || 0) + 1;
+                        }
+                    }
+                    csvOutput += outputHeaders.join(',') + '\n';
+                    csvOutput += `COMPANY: ${company},,,\n`;
+                    csvOutput += `Total Records,${companyRows.length},,,\n\n`;
+                    for (const category of analysisColumns) {
+                        if (!patterns[category]) continue;
+                        const sorted = Object.entries(patterns[category]).sort((a,b) => b[1] - a[1]);
+                        if (sorted.length === 0) continue;
+                        csvOutput += `${category.toUpperCase()},,,\n`;
+                        const total = sorted.reduce((sum,[_,count]) => sum + count, 0);
+                        for (const [value, count] of sorted) {
+                            const percentage = ((count / total) * 100).toFixed(2);
+                            let strength = 'Low';
+                            if (percentage > 20) strength = 'Very High';
+                            else if (percentage > 15) strength = 'High';
+                            else if (percentage > 10) strength = 'Medium';
+                            csvOutput += `${category},${value},${count},${percentage}%,${strength}\n`;
+                        }
+                        csvOutput += '\n';
+                    }
+                    csvOutput += '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+                }
+                const timestamp = new Date().toISOString().split('T')[0];
+                downloadCSV(csvOutput, `ML_Pattern_By_Company_${timestamp}.csv`);
+                log(`\n✓ Downloaded: ML_Pattern_By_Company_${timestamp}.csv`);
+            } catch (e) { log(`❌ Error: ${e.message}`); console.error(e); }
+        }
+
+        // =========================================================
+        // TRADINGVIEW-STYLE CANDLESTICK CHART WITH NUMEROLOGY
+        // USES accessToken FROM MAIN AUTH - NO SEPARATE LOGIN
+        // =========================================================
+
+        let currentChart = null;
+
+        async function genChart() {
+            const instrumentKey = document.getElementById('chartInstrumentKey').value.trim();
+            const incorpDate = document.getElementById('chartIncorpDate').value.trim();
+            const range = document.getElementById('chartDateRange').value;
+
+            // Check if user is authenticated using the existing accessToken
+            if (!accessToken) { 
+                log('❌ Please login first (Section 1: LOGIN)'); 
+                return; 
+            }
+
+            if (!instrumentKey) { log('❌ Please enter instrument key'); return; }
+            if (!incorpDate) { log('❌ Please enter incorporation date'); return; }
+
+            const statusDiv = document.getElementById('chartLoadingStatus');
+            statusDiv.style.display = 'block';
+            statusDiv.style.color = 'var(--accent)';
+            statusDiv.textContent = '⏳ Fetching weekly candle data from Upstox API...';
+
+            log('== GENERATING CANDLESTICK CHART ==');
+            log(`Instrument: ${instrumentKey}`);
+            log(`Incorporation: ${incorpDate}`);
+            log(`Range: ${range}`);
+
+            const toDate = new Date();
+            let fromDate = new Date();
+            if (range === '1Y') fromDate.setFullYear(toDate.getFullYear() - 1);
+            else if (range === '2Y') fromDate.setFullYear(toDate.getFullYear() - 2);
+            else if (range === '5Y') fromDate.setFullYear(toDate.getFullYear() - 5);
+            else if (range === 'MAX') fromDate = new Date('2008-01-01');
+
+            const fromDateStr = fromDate.toISOString().split('T')[0];
+            const toDateStr = toDate.toISOString().split('T')[0];
+
+            try {
+                // Fetch WEEKLY candle data using existing accessToken
+                const url = `https://api.upstox.com/v2/historical-candle/${encodeURIComponent(instrumentKey)}/week/${toDateStr}/${fromDateStr}`;
+
+                const response = await fetch(url, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+
+                const result = await response.json();
+
+                if (!result.data || !result.data.candles || result.data.candles.length === 0) {
+                    throw new Error('No candle data received from API');
+                }
+
+                const candles = result.data.candles.reverse();
+                log(`✓ Fetched ${candles.length} weekly candles`);
+
+                statusDiv.textContent = '⏳ Calculating numerology for each week...';
+
+                const chartData = [];
+                const numerologyLabels = [];
+
+                for (const candle of candles) {
+                    const [timestamp, open, high, low, close, volume] = candle;
+                    const date = new Date(timestamp);
+                    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                    const monthName = monthNames[date.getMonth()];
+                    const year = date.getFullYear();
+                    const monthYear = `${monthName} ${year}`;
+
+                    const pm = calculatePersonalMonth(incorpDate, monthYear);
+                    const py = calculatePersonalYear(incorpDate, monthYear);
+
+                    chartData.push({
+                        x: date.getTime(),
+                        o: open,
+                        h: high,
+                        l: low,
+                        c: close
+                    });
+
+                    if (date.getDate() <= 7) {
+                        const isJanuary = date.getMonth() === 0;
+                        numerologyLabels.push({
+                            date: date.getTime(),
+                            label: isJanuary ? `PY:${py} PM:${pm}` : `PM:${pm}`,
+                            isJanuary: isJanuary
+                        });
+                    }
+                }
+
+                statusDiv.textContent = '⏳ Rendering candlestick chart...';
+
+                if (currentChart) {
+                    currentChart.destroy();
+                    currentChart = null;
+                }
+
+                const ctx = document.getElementById('candlestickCanvas').getContext('2d');
+
+                currentChart = new Chart(ctx, {
+                    type: 'candlestick',
+                    data: {
+                        datasets: [{
+                            label: instrumentKey,
+                            data: chartData,
+                            borderColor: {
+                                up: '#26a69a',
+                                down: '#ef5350',
+                                unchanged: '#999'
+                            },
+                            backgroundColor: {
+                                up: '#26a69a',
+                                down: '#ef5350',
+                                unchanged: '#999'
+                            }
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `${instrumentKey} - Weekly Candles with Numerology`,
+                                color: getComputedStyle(document.documentElement).getPropertyValue('--text'),
+                                font: { size: 14, family: 'JetBrains Mono' }
+                            },
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const point = context.raw;
+                                        return [
+                                            `O: ${point.o}`,
+                                            `H: ${point.h}`,
+                                            `L: ${point.l}`,
+                                            `C: ${point.c}`
+                                        ];
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: { unit: 'week' },
+                                grid: { color: getComputedStyle(document.documentElement).getPropertyValue('--border') },
+                                ticks: { color: getComputedStyle(document.documentElement).getPropertyValue('--text') }
+                            },
+                            y: {
+                                position: 'right',
+                                grid: { color: getComputedStyle(document.documentElement).getPropertyValue('--border') },
+                                ticks: { color: getComputedStyle(document.documentElement).getPropertyValue('--text') }
+                            }
+                        }
+                    },
+                    plugins: [{
+                        afterDatasetsDraw: (chart) => {
+                            const ctx = chart.ctx;
+                            const xAxis = chart.scales.x;
+                            const yAxis = chart.scales.y;
+
+                            ctx.save();
+                            ctx.font = 'bold 10px JetBrains Mono';
+
+                            for (const labelData of numerologyLabels) {
+                                const x = xAxis.getPixelForValue(labelData.date);
+                                const y = yAxis.top + 10;
+
+                                ctx.fillStyle = labelData.isJanuary ? '#2563eb' : '#26a69a';
+                                ctx.fillText(labelData.label, x, y);
+                            }
+                            ctx.restore();
+                        }
+                    }]
+                });
+
+                document.getElementById('chartContainer').style.display = 'block';
+                statusDiv.style.display = 'none';
+
+                log(`✓ Chart rendered with ${chartData.length} candles`);
+                log(`✓ Numerology labels: PM at start of each month, PY at each January`);
+                log('== CHART COMPLETE ==');
+
+            } catch (e) {
+                statusDiv.textContent = `❌ Error: ${e.message}`;
+                statusDiv.style.color = 'var(--error-text)';
+                log(`❌ Error generating chart: ${e.message}`);
+                console.error(e);
+            }
+        }
+
+
+        
+        // === NUMEROLOGY + ML ===
+        const CNY={1930:'01-30',1931:'02-17',1932:'02-06',1933:'01-26',1934:'02-14',1935:'02-04',1936:'01-24',1937:'02-11',1938:'01-31',1939:'02-19',1940:'02-08',1941:'01-27',1942:'02-15',1943:'02-05',1944:'01-25',1945:'02-13',1946:'02-02',1947:'01-22',1948:'02-10',1949:'01-29',1950:'02-17',1951:'02-06',1952:'01-27',1953:'02-14',1954:'02-03',1955:'01-24',1956:'02-12',1957:'01-31',1958:'02-18',1959:'02-08',1960:'01-28',1961:'02-15',1962:'02-05',1963:'01-25',1964:'02-13',1965:'02-02',1966:'01-21',1967:'02-09',1968:'01-30',1969:'02-17',1970:'02-06',1971:'01-27',1972:'02-15',1973:'02-03',1974:'01-23',1975:'02-11',1976:'01-31',1977:'02-18',1978:'02-07',1979:'01-28',1980:'02-16',1981:'02-05',1982:'01-25',1983:'02-13',1984:'02-02',1985:'02-20',1986:'02-09',1987:'01-29',1988:'02-17',1989:'02-06',1990:'01-27',1991:'02-15',1992:'02-04',1993:'01-23',1994:'02-10',1995:'01-31',1996:'02-19',1997:'02-07',1998:'01-28',1999:'02-16',2000:'02-05',2001:'01-24',2002:'02-12',2003:'02-01',2004:'01-22',2005:'02-09',2006:'01-29',2007:'02-18',2008:'02-07',2009:'01-26',2010:'02-14',2011:'02-03',2012:'01-23',2013:'02-10',2014:'01-31',2015:'02-19',2016:'02-08',2017:'01-28',2018:'02-16',2019:'02-05',2020:'01-25',2021:'02-12',2022:'02-01',2023:'01-22',2024:'02-10',2025:'01-29',2026:'02-17',2027:'02-06',2028:'01-26',2029:'02-13',2030:'02-03'};
+        const ZA=['Rat','Ox','Tiger','Rabbit','Dragon','Snake','Horse','Goat','Monkey','Rooster','Dog','Pig'];
+        function getCZ(d){const p=d.includes('/')?d.split('/'):d.split('-');const dy=parseInt(p[0]),mn=parseInt(p[1]),yr=parseInt(p[2]);let cy=yr;if(CNY[yr]){const c=CNY[yr].split('-');if(mn<parseInt(c[0])||(mn===parseInt(c[0])&&dy<parseInt(c[1])))cy--;}return ZA[(cy-1924)%12];}
+        function cLP(d){const p=d.includes('/')?d.split('/'):d.split('-');let t=parseInt(p[0])+parseInt(p[1]);for(const x of p[2])t+=parseInt(x);const m=[11,22,28,33,20];if(m.includes(t))return t;while(t>9){t=t.toString().split('').reduce((s,x)=>s+parseInt(x),0);if(m.includes(t))return t;}return t;}
+        function nMY(d){if(d.includes('-')){const p=d.split('-');let y=p[1];if(y.length===2)y=parseInt(y)<50?'20'+y:'19'+y;return p[0]+' '+y;}return d;}
+        function cPY(inc,tgt){tgt=nMY(tgt);const ip=inc.includes('/')?inc.split('/'):inc.split('-');const bd=parseInt(ip[0]),bm=parseInt(ip[1]);const mm={'Jan':1,'January':1,'Feb':2,'February':2,'Mar':3,'March':3,'Apr':4,'April':4,'May':5,'Jun':6,'June':6,'Jul':7,'July':7,'Aug':8,'August':8,'Sep':9,'Sept':9,'September':9,'Oct':10,'October':10,'Nov':11,'November':11,'Dec':12,'December':12};const tp=tgt.split(' ');const tm=mm[tp[0]],ty=parseInt(tp[1]);const yu=tm>=bm?ty:ty-1;let to=bd+bm;for(const d of yu.toString())to+=parseInt(d);const mn=[11,22,28,33,20];if(mn.includes(to))return to;while(to>9){to=to.toString().split('').reduce((s,d)=>s+parseInt(d),0);if(mn.includes(to))return to;}return to;}
+        function cPM(inc,tgt){tgt=nMY(tgt);const ip=inc.includes('/')?inc.split('/'):inc.split('-');const bd=parseInt(ip[0]),bm=parseInt(ip[1]);const mm={'Jan':1,'January':1,'Feb':2,'February':2,'Mar':3,'March':3,'Apr':4,'April':4,'May':5,'Jun':6,'June':6,'Jul':7,'July':7,'Aug':8,'August':8,'Sep':9,'Sept':9,'September':9,'Oct':10,'October':10,'Nov':11,'November':11,'Dec':12,'December':12};const tp=tgt.split(' ');const tm=mm[tp[0]],ty=parseInt(tp[1]);const yu=tm>=bm?ty:ty-1;let to=bd+bm+tm;for(const d of yu.toString())to+=parseInt(d);const mn=[11,22,28,33,20];if(mn.includes(to))return to;while(to>9){to=to.toString().split('').reduce((s,d)=>s+parseInt(d),0);if(mn.includes(to))return to;}return to;}
+        function pSCSV(csv){const ls=csv.split('\n').map(l=>l.trim()).filter(l=>l);const st=[];let c=null,ci=null,md=[];const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];for(const l of ls){if(l.startsWith('Company')||l.startsWith('Monthly')||l.startsWith('Date,Open'))continue;const p=l.split(',');if(p.length>=2&&(p[1].includes('/')||p[1].includes('-'))&&(p[1].split('/').length===3||p[1].split('-').length===3)){if(c&&md.length>0)st.push({stock:c,incorporationDate:ci,monthlyData:[...md]});c=p[0].trim();ci=p[1].trim();md=[];}else if(p.length>=5&&ms.some(m=>p[0].startsWith(m))){md.push({date:p[0].trim(),open:p[1].trim()||'',close:p[2].trim()||'',high:p[3].trim()||'',low:p[4].trim()||'',changePct:p[5]?p[5].trim():''});}}if(c&&md.length>0)st.push({stock:c,incorporationDate:ci,monthlyData:[...md]});return st;}
+        async function processNumerology(){const f=document.getElementById('numerologyFile');if(!f.files[0]){log('❌ CSV');return;}log('== NUM ==');try{const c=await readFile(f.files[0]);const s=pSCSV(c);if(!s.length)throw new Error('No data');log(`✓ ${s.length} stocks`);const r=[];for(const{stock,incorporationDate,monthlyData}of s){if(!incorporationDate||incorporationDate==='Not Available')continue;const lp=cLP(incorporationDate);const cz=getCZ(incorporationDate);for(const m of monthlyData){const py=cPY(incorporationDate,m.date);const pm=cPM(incorporationDate,m.date);const mz=getCZ(`15/${({'Jan':1,'January':1,'Feb':2,'February':2,'Mar':3,'March':3,'Apr':4,'April':4,'May':5,'Jun':6,'June':6,'Jul':7,'July':7,'Aug':8,'August':8,'Sep':9,'Sept':9,'September':9,'Oct':10,'October':10,'Nov':11,'November':11,'Dec':12,'December':12})[m.date.split(' ')[0]]}/${m.date.split(' ')[1]}`);r.push({'Stock':stock,'Incorporation_Date':incorporationDate,'Company_Chinese_Zodiac':cz,'Life_Path':lp,'Month_Year':nMY(m.date),'Month_Chinese_Zodiac':mz,'Personal_Year':py,'Personal_Month':pm,'Open':m.open,'Close':m.close,'High':m.high,'Low':m.low,'Change_%':m.changePct});}}const h=['Stock','Incorporation_Date','Company_Chinese_Zodiac','Life_Path','Month_Year','Month_Chinese_Zodiac','Personal_Year','Personal_Month','Open','Close','High','Low','Change_%'];let csv=h.join(',')+' \n';for(const row of r)csv+=h.map(k=>(row[k]||'').toString().includes(',')?`"${row[k]}"`:row[k]).join(',')+' \n';downloadCSV(csv,`num_${new Date().toISOString().split('T')[0]}.csv`);log('✓ Done');}catch(e){log(`❌ ${e.message}`);}}
+        async function analyzeMLPatterns(){const f=document.getElementById('mlFile');if(!f.files[0]){log('❌ CSV');return;}log('== ML ==');try{const csv=parseCSV(await readFile(f.files[0]));if(!csv.length)throw new Error('Empty');const cols=['Life_Path','Personal_Year','Personal_Month','Company_Chinese_Zodiac','Month_Chinese_Zodiac'];const cps={};for(const r of csv){const c=r['Stock']||'Unknown';if(!cps[c])cps[c]=[];cps[c].push(r);}let out='';const h=['Category','Value','Occurrences','Percentage','Pattern_Strength'];for(const[cp,rs]of Object.entries(cps)){const pt={};for(const cl of cols){pt[cl]={};for(const r of rs)if(r[cl])pt[cl][r[cl]]=(pt[cl][r[cl]]||0)+1;}out+=h.join(',')+' \n'+`COMPANY: ${cp},,,\n`+`Total,${rs.length},,,\n\n`;for(const cl of cols){if(!pt[cl])continue;const s=Object.entries(pt[cl]).sort((a,b)=>b[1]-a[1]);if(!s.length)continue;out+=`${cl.toUpperCase()},,,\n`;const tot=s.reduce((sm,[_,c])=>sm+c,0);for(const[v,c]of s){const pct=((c/tot)*100).toFixed(2);const str=pct>20?'Very High':pct>15?'High':pct>10?'Medium':'Low';out+=`${cl},${v},${c},${pct}%,${str}\n`;}out+='\n';}out+='\n━━\n\n';}downloadCSV(out,`ML_${new Date().toISOString().split('T')[0]}.csv`);log('✓ Done');}catch(e){log(`❌ ${e.message}`);}}
+
+        // === V3 STOCK SEARCH ===
+        let instrumentCache=null;
+        async function searchStockV3(){const query=document.getElementById('cSearch').value.trim();if(!accessToken){log('❌ Login first');return;}if(!query){log('❌ Enter symbol');return;}log(`== SEARCH: ${query} ==`);try{const res=await fetch(`https://api.upstox.com/v2/search?query=${encodeURIComponent(query)}`,{headers:{'Authorization':`Bearer ${accessToken}`,'Accept':'application/json'}});if(!res.ok)throw new Error(`API ${res.status}`);const data=await res.json();if(!data||!data.length){log('❌ No results');return;}const first=data[0];document.getElementById('cInst').value=first.instrument_key;log(`✓ ${first.name||first.trading_symbol}`);log(`✓ Key: ${first.instrument_key}`);}catch(e){log(`❌ ${e.message}`);}}
+
+        // === V3 CHART ===
+        async function genChartV3(){const inst=document.getElementById('cInst').value.trim();const inc=document.getElementById('cInc').value.trim();const rng=document.getElementById('cRng').value;if(!accessToken){log('❌ Login');return;}if(!inst||!inc){log('❌ Fill fields');return;}log('== V3 CHART ==');const win=window.open('','_blank');win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${inst}</title><script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"><\/script><style>*{margin:0;padding:0}body{background:#0a0e1a;font-family:monospace;overflow:hidden}#chart{width:100vw;height:100vh}#controls{position:absolute;top:15px;left:15px;z-index:20;background:rgba(0,0,0,0.95);padding:15px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.5);max-width:450px}.title{font-size:20px;font-weight:bold;margin-bottom:12px;color:#fff;word-wrap:break-word}.tf-btn{background:#1e293b;color:#fff;border:2px solid #334155;padding:8px 16px;margin:0 4px 8px 0;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;font-family:monospace;transition:all 0.2s}.tf-btn:hover{background:#334155;border-color:#475569}.tf-btn.active{background:#2563eb;border-color:#3b82f6}.badges{margin-top:12px;max-height:100px;overflow-y:auto}.badge{display:inline-block;font-size:11px;font-weight:bold;padding:5px 12px;border-radius:5px;margin:3px 5px 3px 0;white-space:nowrap}.pm{background:#26a69a;color:#000}.py{background:#2563eb;color:#fff}.legend{font-size:10px;color:#888;margin-top:12px}.loading{color:#2563eb;margin-top:8px;font-size:11px}</style></head><body><div id="controls"><div class="title">${inst}</div><div><button class="tf-btn" onclick="loadTF('4hour')">4H</button><button class="tf-btn active" onclick="loadTF('day')">1D</button><button class="tf-btn" onclick="loadTF('week')">1W</button></div><div class="loading" id="ld" style="display:none">Loading...</div><div class="badges" id="lbl"></div><div class="legend">🔵 PY (birth month) | 🟢 PM (every month)</div></div><div id="chart"></div><script>const TK='${accessToken}';const IN='${inst}';const IC='${inc}';const RG='${rng}';let ch,cs;const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];const bm=parseInt(IC.split('/')[1]);function cPY(i,t){const ip=i.split('/');const bd=parseInt(ip[0]),bm=parseInt(ip[1]);const mm={'Jan':1,'January':1,'Feb':2,'February':2,'Mar':3,'March':3,'Apr':4,'April':4,'May':5,'Jun':6,'June':6,'Jul':7,'July':7,'Aug':8,'August':8,'Sep':9,'Sept':9,'September':9,'Oct':10,'October':10,'Nov':11,'November':11,'Dec':12,'December':12};const tp=t.split(' ');const tm=mm[tp[0]],ty=parseInt(tp[1]);const yu=tm>=bm?ty:ty-1;let to=bd+bm;for(const d of yu.toString())to+=parseInt(d);const mn=[11,22,28,33,20];if(mn.includes(to))return to;while(to>9){to=to.toString().split('').reduce((s,d)=>s+parseInt(d),0);if(mn.includes(to))return to;}return to;}function cPM(i,t){const ip=i.split('/');const bd=parseInt(ip[0]),bm=parseInt(ip[1]);const mm={'Jan':1,'January':1,'Feb':2,'February':2,'Mar':3,'March':3,'Apr':4,'April':4,'May':5,'Jun':6,'June':6,'Jul':7,'July':7,'Aug':8,'August':8,'Sep':9,'Sept':9,'September':9,'Oct':10,'October':10,'Nov':11,'November':11,'Dec':12,'December':12};const tp=t.split(' ');const tm=mm[tp[0]],ty=parseInt(tp[1]);const yu=tm>=bm?ty:ty-1;let to=bd+bm+tm;for(const d of yu.toString())to+=parseInt(d);const mn=[11,22,28,33,20];if(mn.includes(to))return to;while(to>9){to=to.toString().split('').reduce((s,d)=>s+parseInt(d),0);if(mn.includes(to))return to;}return to;}async function loadTF(tf,el){document.querySelectorAll('.tf-btn').forEach(b=>b.classList.remove('active'));if(el)el.classList.add('active');document.getElementById('ld').style.display='block';const to=new Date();let from=new Date();if(RG==='1Y')from.setFullYear(to.getFullYear()-1);else if(RG==='2Y')from.setFullYear(to.getFullYear()-2);else if(RG==='5Y')from.setFullYear(to.getFullYear()-5);else from.setFullYear(to.getFullYear()-10);const intervalMap={'4hour':'hours/4','day':'days/1','week':'weeks/1'};const v3Int=intervalMap[tf]||'days/1';const url=\`https://api.upstox.com/v3/historical-candle/\${encodeURIComponent(IN)}/\${v3Int}/\${to.toISOString().split('T')[0]}/\${from.toISOString().split('T')[0]}\`;try{const r=await fetch(url,{headers:{'Accept':'application/json','Authorization':\`Bearer \${TK}\`}});if(!r.ok)throw new Error(\`API \${r.status}\`);const res=await r.json();if(!res.data?.candles?.length)throw new Error('No data');const cn=res.data.candles.reverse();const cd=[];const mk=[];const pm=new Map();let lm=-1;for(const[ts,o,h,l,c]of cn){const d=new Date(ts);const my=\`\${ms[d.getMonth()]} \${d.getFullYear()}\`;const p=cPM(IC,my);const y=cPY(IC,my);const t=Math.floor(d.getTime()/1000);cd.push({time:t,open:o,high:h,low:l,close:c});const nm=d.getMonth()!==lm;if(nm){lm=d.getMonth();const ib=d.getMonth()+1===bm;if(ib){mk.push({time:t,position:'aboveBar',color:'#2563eb',shape:'circle',text:\`PY:\${y} PM:\${p}\`,size:1});pm.set(\`PY:\${y} PM:\${p}\`,{label:\`PY:\${y} PM:\${p}\`,isPY:true});}else{mk.push({time:t,position:'belowBar',color:'#26a69a',shape:'circle',text:\`PM:\${p}\`,size:1});pm.set(\`PM:\${p}\`,{label:\`PM:\${p}\`,isPY:false});}}}cs.setData(cd);cs.setMarkers(mk);const lb=document.getElementById('lbl');lb.innerHTML='';for(const[_,l]of pm){lb.innerHTML+=\`<span class="badge \${l.isPY?'py':'pm'}">\${l.label}</span>\`;}document.getElementById('ld').style.display='none';}catch(e){alert('Error: '+e.message);document.getElementById('ld').style.display='none';}}ch=LightweightCharts.createChart(document.getElementById('chart'),{layout:{background:{color:'#0a0e1a'},textColor:'#d1d4dc'},grid:{vertLines:{color:'#1a1f33'},horzLines:{color:'#1a1f33'}},crosshair:{mode:LightweightCharts.CrosshairMode.Normal},rightPriceScale:{borderColor:'#2b2b43'},timeScale:{borderColor:'#2b2b43',timeVisible:true},width:window.innerWidth,height:window.innerHeight});cs=ch.addCandlestickSeries({upColor:'#26a69a',downColor:'#ef5350',borderUpColor:'#26a69a',borderDownColor:'#ef5350',wickUpColor:'#26a69a',wickDownColor:'#ef5350'});window.addEventListener('resize',()=>{ch.applyOptions({width:window.innerWidth,height:window.innerHeight});});loadTF('day');<\/script></body></html>`);win.document.close();log('✓ V3 Chart opened');}
+
+log('✓ System ready. Click Auth to begin.');
+    </script>
+</body>
+</html>
