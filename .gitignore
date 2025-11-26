@@ -1,0 +1,31 @@
+# Local Configuration (has real credentials - NEVER commit!)
+config.local.js
+
+# Environment Files
+.env
+.env.local
+.env.production
+
+# Credentials and secrets
+*.key
+*.pem
+secrets/
+
+# Logs
+logs/
+*.log
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build artifacts
+dist/
+build/
+node_modules/
