@@ -1,255 +1,167 @@
 <!DOCTYPE html>
 <html lang="en">
 
-<!-- External Libraries -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
-<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upstox Console V3</title>
 
-<style>
-    :root {
-        --bg-page: #ffffff;
-        --bg-panel: #f9fafb;
-        --border: #000000;
-        --text: #000000;
-        --text-dim: #52525b;
-        --success-bg: #dcfce7;
-        --success-text: #15803d;
-        --error-bg: #fee2e2;
-        --error-text: #b91c1c;
-        --accent: #2563eb;
-        --font: 'JetBrains Mono', monospace;
-    }
+    <!-- Security -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.upstox.com; img-src 'self' data:;">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
 
-    [data-theme="dark"] {
-        --bg-page: #050505;
-        --bg-panel: #111111;
-        --border: #333333;
-        --text: #eeeeee;
-        --text-dim: #888888;
-        --success-bg: #064e3b;
-        --success-text: #34d399;
-        --error-bg: #7f1d1d;
-        --error-text: #f87171;
-    }
+    <!-- Libraries -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 
-    * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-    }
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #f5f5f5;
+        }
 
-    body {
-        background-color: var(--bg-page);
-        color: var(--text);
-        font-family: var(--font);
-        font-size: 12px;
-        height: 100vh;
-        display: flex;
-        flex-direction: column;
-        padding: 20px;
-        overflow: hidden;
-        transition: background-color 0.3s, color 0.3s;
-    }
+        h1 {
+            margin-bottom: 20px;
+        }
 
-    header {
-        margin-bottom: 15px;
-        border-bottom: 1px solid var(--border);
-        padding-bottom: 15px;
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-end;
-        flex-shrink: 0;
-    }
+        .status {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
 
-    h1 {
-        font-size: 16px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: -0.5px;
-    }
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
 
-    .subtitle {
-        color: var(--text-dim);
-        margin-top: 4px;
-        font-size: 11px;
-    }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
 
-    .config-status {
-        padding: 8px 12px;
-        border: 1px solid var(--border);
-        font-size: 10px;
-        background: var(--bg-panel);
-        margin-bottom: 15px;
-    }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
 
-    .config-status.error {
-        background: var(--error-bg);
-        color: var(--error-text);
-        border-color: var(--error-text);
-    }
+        button:hover {
+            background: #0056b3;
+        }
 
-    .config-status.success {
-        background: var(--success-bg);
-        color: var(--success-text);
-        border-color: var(--success-text);
-    }
-
-    .btn {
-        width: 100%;
-        background: var(--text);
-        color: var(--bg-page);
-        border: 1px solid var(--text);
-        padding: 10px;
-        font-family: var(--font);
-        font-weight: 700;
-        cursor: pointer;
-        text-transform: uppercase;
-        font-size: 11px;
-        transition: opacity 0.2s;
-    }
-
-    .btn:hover {
-        opacity: 0.9;
-    }
-
-    .btn.theme-toggle {
-        width: auto;
-        padding: 4px 8px;
-        font-size: 10px;
-        background: transparent;
-        color: var(--text);
-        border: 1px solid var(--border);
-    }
-
-    .terminal {
-        padding: 10px;
-        font-size: 10px;
-        height: 120px;
-        overflow-y: auto;
-        font-family: var(--font);
-        background: var(--bg-page);
-        border: 1px solid var(--border);
-    }
-
-    .log-entry {
-        margin-bottom: 4px;
-        word-break: break-all;
-    }
-</style>
+        #log {
+            background: #fff;
+            padding: 15px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+        }
+    </style>
 </head>
 
 <body>
 
-    <header>
-        <div>
-            <h1>Upstox V3 Console [Production]</h1>
-            <div class="subtitle">// Secure | No Exposed Credentials | V3 API</div>
-        </div>
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <div id="authStatus" style="font-size: 10px; color: var(--text-dim);"></div>
-            <button class="btn theme-toggle" onclick="toggleTheme()">🌗 Theme</button>
-        </div>
-    </header>
+    <h1>🚀 Upstox Console V3</h1>
 
-    <div id="configStatus" class="config-status"></div>
+    <div id="status" class="status">Loading configuration...</div>
 
-    <div style="padding: 20px; max-width: 800px;">
-        <h2 style="margin-bottom: 15px;">🚀 Deployment Successful!</h2>
+    <button onclick="testAuth()" id="authBtn">Test OAuth</button>
 
-        <p style="margin-bottom: 15px;">Your Upstox Console is deployed and ready. Complete these final steps:</p>
+    <div id="log"></div>
 
-        <h3 style="margin: 20px 0 10px 0; font-size: 14px;">1. Configure Environment Variables (If not done)</h3>
-        <ul style="margin-left: 20px; margin-bottom: 15px; line-height: 1.8;">
-            <li>Go to Vercel Dashboard → Settings → Environment Variables</li>
-            <li>Add: <code>UPSTOX_API_KEY</code>, <code>UPSTOX_API_SECRET</code>, <code>UPSTOX_REDIRECT_URI</code></li>
-            <li>Redeploy after adding variables</li>
-        </ul>
+    <!-- Config & API -->
+    <script src="config.js"></script>
+    <script src="vercel-env.js"></script>
+    <script src="js/upstoxAPI.js"></script>
 
-        <h3 style="margin: 20px 0 10px 0; font-size: 14px;">2. Update Upstox Redirect URL</h3>
-        <ul style="margin-left: 20px; margin-bottom: 15px; line-height: 1.8;">
-            <li>Go to <a href="https://upstox.com/developer/apps" target="_blank" style="color: var(--accent);">Upstox
-                    }
+    <script>
+        let api;
 
-                    function showConfigSuccess(message) {
-                    const statusDiv = document.getElementById('configStatus');
-                    statusDiv.className = 'config-status success';
-                    statusDiv.innerHTML = message;
-                    }
+        function log(msg) {
+            const logDiv = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div>[${time}] ${msg}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
 
-                    function log(message) {
-                    const terminal = document.getElementById('terminal');
-                    const timestamp = new Date().toLocaleTimeString();
-                    const entry = document.createElement('div');
-                    entry.className = 'log-entry';
-                    entry.textContent = `[${timestamp}] ${message}`;
-                    terminal.appendChild(entry);
-                    terminal.scrollTop = terminal.scrollHeight;
-                    }
+        async function init() {
+            log('Initializing...');
 
-                    function testAuth() {
-                    if (!api) {
-                    log('❌ API not initialized');
-                    return;
-                    }
+            // Load config from API
+            if (window.UPSTOX_CONFIG && window.UPSTOX_CONFIG.loadFromAPI) {
+                log('Loading config from Vercel API...');
+                await window.UPSTOX_CONFIG.loadFromAPI();
+            }
 
-                    if (api.isAuthenticated()) {
-                    log('✓ Already authenticated');
-                    log('✓ Token: ' + api.accessToken.substring(0, 20) + '...');
-                    alert('Already authenticated! Token valid until next session.');
-                    return;
-                    }
+            if (!window.UPSTOX_CONFIG || !window.UPSTOX_CONFIG.isConfigured()) {
+                showError('Config not loaded. Check Vercel environment variables.');
+                log('❌ Config missing - add UPSTOX_API_KEY, UPSTOX_API_SECRET, UPSTOX_REDIRECT_URI');
+                return;
+            }
 
-                    // Start OAuth flow
-                    log('🔐 Starting Upstox OAuth flow...');
-                    const authUrl = api.getAuthorizationUrl();
-                    log('→ Redirecting to Upstox...');
+            log('✅ Config loaded');
+            log(`Redirect URI: ${window.UPSTOX_CONFIG.redirectUri}`);
 
-                    window.location.href = authUrl;
-                    }
+            api = new UpstoxAPI(window.UPSTOX_CONFIG);
 
-                    function toggleTheme() {
-                    const body = document.body;
-                    const currentTheme = body.getAttribute('data-theme');
-                    if (currentTheme === 'dark') {
-                    body.setAttribute('data-theme', 'light');
-                    log('Switched to light theme');
-                    } else {
-                    body.setAttribute('data-theme', 'dark');
-                    log('Switched to dark theme');
-                    }
-                    }
+            if (api.isAuthenticated()) {
+                showSuccess('Already authenticated!');
+                log('✅ Token found in session');
+            } else {
+                showSuccess('Ready! Click button to authenticate.');
+                log('Ready for OAuth');
+            }
 
-                    // Handle OAuth callback
-                    function handleCallback() {
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const code = urlParams.get('code');
+            // Check for OAuth callback
+            const code = new URLSearchParams(window.location.search).get('code');
+            if (code && api) {
+                log('📥 Auth code received, exchanging for token...');
+                try {
+                    await api.exchangeCodeForToken(code);
+                    showSuccess('✅ Authenticated successfully!');
+                    log('✅ Token obtained and stored');
+                    window.history.replaceState({}, '', window.location.pathname);
+                } catch (e) {
+                    showError('Auth failed: ' + e.message);
+                    log('❌ ' + e.message);
+                }
+            }
+        }
 
-                    if (code && api) {
-                    log('✓ Authorization code received');
-                    log('→ Exchanging for access token...');
+        function showSuccess(msg) {
+            const div = document.getElementById('status');
+            div.className = 'status success';
+            div.textContent = msg;
+        }
 
-                    api.exchangeCodeForToken(code)
-                    .then(token => {
-                    log('✓ Access token obtained and stored');
-                    log('✓ Authentication successful!');
-                    showConfigSuccess('✓ Authenticated successfully!');
+        function showError(msg) {
+            const div = document.getElementById('status');
+            div.className = 'status error';
+            div.textContent = msg;
+        }
 
-                    // Remove code from URL
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                    })
-                    .catch(error => {
-                    log('❌ Token exchange failed: ' + error.message);
-                    showConfigError('Authentication failed. Check console.');
-                    });
-                    }
-                    }
+        function testAuth() {
+            if (!api) {
+                log('❌ API not initialized');
+                return;
+            }
 
-                    // Initialize on page load
-                    window.addEventListener('DOMContentLoaded', () => {
-                    init();
-                    handleCallback();
-                    });
-                    </script>
+            if (api.isAuthenticated()) {
+                alert('Already authenticated!');
+                return;
+            }
+
+            log('🔐 Redirecting to Upstox...');
+            window.location.href = api.getAuthorizationUrl();
+        }
+
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
 
 </body>
 
