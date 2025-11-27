@@ -939,18 +939,35 @@
             return INCORPORATION_DATES[symbol.toUpperCase()] || 'Not Available';
         }
 
-        async function authenticateUpstox() {
-            const authUrl = `https://api.upstox.com/v2/login/authorization/dialog?response_type=code&client_id=${API_KEY}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
-            log('Opening Upstox authorization page...');
-            window.open(authUrl, '_blank', 'width=600,height=700');
-            showStatus('Waiting for authorization code...', 'info');
-            const authCode = prompt('Paste the authorization code from the redirect URL:');
-            if (!authCode) {
-                showStatus('Authorization cancelled', 'error');
-                return;
-            }
-            await exchangeCodeForToken(authCode);
-        }
+async function authenticateUpstox() {
+    const authUrl = `https://api.upstox.com/v2/login/authorization/dialog?response_type=code&client_id=${API_KEY}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+    log('Opening Upstox authorization page...');
+    
+    // Open in new window
+    const authWindow = window.open(authUrl, 'UpstoxAuth', 'width=600,height=700,left=200,top=100');
+    
+    if (!authWindow) {
+        alert('Popup blocked! Please allow popups for this site and try again.');
+        return;
+    }
+    
+    showStatus('⏳ Waiting for authorization...', 'info');
+    
+    // Wait a bit for user to see the popup
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Show prominent prompt
+    const authCode = prompt('After authorizing:\n1. Copy the code from URL (after "?code=")\n2. Paste it here:\n\nExample: If URL is "...callback?code=ABC123", paste "ABC123"');
+    
+    if (!authCode) {
+        showStatus('❌ Authorization cancelled', 'error');
+        if (authWindow && !authWindow.closed) authWindow.close();
+        return;
+    }
+    
+    if (authWindow && !authWindow.closed) authWindow.close();
+    await exchangeCodeForToken(authCode.trim());
+}
 
         async function exchangeCodeForToken(authCode) {
             try {
