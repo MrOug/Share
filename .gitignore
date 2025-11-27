@@ -1,31 +1,34 @@
-# Local Configuration (has real credentials - NEVER commit!)
-config.local.js
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
 
-# Environment Files
-.env
-.env.local
-.env.production
+# testing
+/coverage
 
-# Credentials and secrets
-*.key
-*.pem
-secrets/
+# next.js
+/.next/
+/out/
 
-# Logs
-logs/
-*.log
+# production
+/build
 
-# OS Files
+# misc
 .DS_Store
-Thumbs.db
+*.pem
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Build artifacts
-dist/
-build/
-node_modules/
+# local env files
+.env*.local
+.env
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
