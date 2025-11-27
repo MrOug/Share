@@ -1,213 +1,221 @@
-# Upstox V3 Console - Production Ready
+# Upstox V3 Console - Next.js Implementation
 
-Enterprise-grade stock analysis console with Upstox V3 API integration, numerology calculations, and advanced charting capabilities.
+> Enterprise-grade stock analysis console built with **Next.js 14**, featuring Upstox V3 API integration, numerology calculations, and advanced charting capabilities.
 
-## 🔒 Security Features
-
-✅ **No hardcoded credentials** - All secrets in configuration files  
-✅ **Encrypted token storage** - Secure session management  
-✅ **Rate limiting** - Automatic request throttling  
-✅ **Retry logic** - Exponential backoff for failed requests  
-✅ **CSP headers** - Content Security Policy protection  
-✅ **Input validation** - Sanitization of all user inputs  
+[![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
+[![Upstox](https://img.shields.io/badge/Upstox-V3_API-orange)](https://upstox.com/developer/)
 
 ## 🚀 Quick Start
 
-### 1. Get Upstox API Credentials
+### Prerequisites
+- **Node.js 18+** installed
+- **Upstox Developer Account** ([Sign up](https://upstox.com/developer/))
 
-1. Visit [Upstox Developer Portal](https://upstox.com/developer/apps)
-2. Create a new app
-3. Note down your **API Key** and **API Secret**
-4. Set redirect URI to `http://127.0.0.1:8080/callback`
-
-### 2. Configure Application
+### Installation
 
 ```bash
-# Copy example config
-cp config.example.js config.js
+# Clone and switch to Next.js branch
+git clone https://github.com/MrOug/Share.git
+cd Share
+git checkout nextjs-v3-console
 
-# Edit config.js and add your credentials
-# NEVER commit config.js to git!
+# Install dependencies
+npm install
+
+# Create environment file
+cp .env.local.example .env.local
 ```
 
-Edit `config.js`:
-```javascript
-const CONFIG = {
-    apiKey: 'your-actual-api-key',
-    apiSecret: 'your-actual-api-secret',
-    redirectUri: 'http://127.0.0.1:8080/callback',
-    // ... rest of config
-};
+### Configuration
+
+1. **Get Upstox API Credentials**
+   - Visit [Upstox Developer Portal](https://upstox.com/developer/)
+   - Create a new app
+   - Note: **API Key** and **API Secret**
+
+2. **Update `.env.local`**
+```env
+NEXT_PUBLIC_UPSTOX_API_KEY=your-api-key-here
+UPSTOX_API_SECRET=your-api-secret-here
+NEXT_PUBLIC_REDIRECT_URI=http://localhost:3000/callback
 ```
 
-### 3. Run Application
+3. **Configure Upstox App**
+   - Set Redirect URI: `http://localhost:3000/callback`
 
-#### Option A: Simple HTTP Server (Python)
+### Run Development Server
+
 ```bash
-python -m http.server 8080
+npm run dev
 ```
 
-#### Option B: Node.js HTTP Server
-```bash
-npx http-server -p 8080
-```
+Open [http://localhost:3000](http://localhost:3000)
 
-#### Option C: VS Code Live Server
-1. Install "Live Server" extension
-2. Right-click `index.html` → "Open with Live Server"
+## 📊 Features
 
-### 4. Open in Browser
+### Core Functionality
+✅ **OAuth 2.0 Authentication** - Secure server-side token exchange  
+✅ **V3 Historical Data** - Proper `/{unit}/{interval}/` format  
+✅ **Multiple Data Sources** - Manual, Top 50, Indices, Sectors  
+✅ **Flexible Timeframes** - 1M to MAX (since 2008/2022)  
+✅ **Dynamic Instruments** - Auto-downloads NSE/BSE from CDN  
+✅ **Rate Limiting** - 300ms delays between requests  
 
-Navigate to: `http://127.0.0.1:8080`
+### Advanced Processing
+✅ **Date Patching** - CSV incorporation date updates  
+✅ **Numerology Engine** - Life Path, Personal Year/Month  
+✅ **Chinese Zodiac** - Company & monthly zodiac mapping  
+✅ **ML Pattern Analysis** - Per-company pattern recognition  
+
+### Visualization
+✅ **TradingView Charts** - Lightweight Charts integration  
+✅ **Stock Cards** - Real-time display with breakdown  
+✅ **Dark/Light Theme** - Toggle support  
 
 ## 📁 Project Structure
 
 ```
-upstox-production/
-├── index.html              # Main application (NO SECRETS)
-├── config.example.js       # Template configuration
-├── config.js               # Your actual config (git-ignored)
-├── .gitignore             # Protects sensitive files
-├── js/
-│   ├── up stoxAPI.js       # V3 API service layer
-│   ├── auth.js            # Authentication logic
-│   ├── dataProcessing.js  # CSV & numerology functions
-│   └── ui.js              # UI rendering & charts
-├── css/
-│   └── styles.css         # Application styles
-└── docs/
-    ├── README.md          # This file
-    ├── SECURITY.md        # Security guidelines
-    └── DEPLOYMENT.md      # Deployment guide
+nextjs-v3-console/
+├── app/
+│   ├── api/auth/token/route.ts   # OAuth endpoint
+│   ├── callback/page.tsx         # OAuth callback
+│   ├── layout.tsx                # Root layout
+│   ├── page.tsx                  # Entry point
+│   └── globals.css               # Styling
+├── components/
+│   └── UpstoxConsole.tsx         # Main component
+├── lib/
+│   ├── upstoxApi.ts              # API layer
+│   ├── numerology.ts             # Calculations
+│   ├── dataProcessing.ts         # CSV utils
+│   └── constants.ts              # Mappings
+├── package.json
+├── next.config.js
+└── tsconfig.json
 ```
 
-## 🔑 Environment Variables (Optional)
+## 🔑 API Reference
 
-For server-side deployment, use environment variables:
+### Upstox V3 Historical Candles
 
+```
+GET /v3/historical-candle/{instrument}/{unit}/{interval}/{to}/{from}
+```
+
+**Examples:**
 ```bash
-export UPSTOX_API_KEY="your-key"
-export UPSTOX_API_SECRET="your-secret"
-export UPSTOX_REDIRECT_URI="your-callback-url"
+# Daily
+/v3/historical-candle/NSE_EQ|INE009A01021/days/1/2024-11-27/2023-11-27
+
+# 4-Hour
+/v3/historical-candle/NSE_EQ|INE009A01021/hours/4/2024-11-27/2024-11-01
+
+# Weekly
+/v3/historical-candle/NSE_EQ|INE009A01021/weeks/1/2024-11-27/2022-11-27
 ```
 
-## 📊 Features
+## 📋 Usage
 
-### Data Analysis
-- Historical data extraction (up to 10+ years)
-- Multiple timeframes: 1M, 5M, 15M, 30M, 1H, 4H, 1D, 1W, 1M
-- Top 50 stocks analysis
-- Gainer/Loser detection
+### 1. Authenticate
+1. Click **[AUTH]**
+2. Login to Upstox
+3. Wait for "✓ Authenticated"
 
-### Numerology Integration
-- Life Path number calculation
-- Personal Year/Month calculations
-- Chinese Zodiac mapping
-- Pattern analysis for each company
+### 2. Fetch Data
+1. Select Data Mode
+2. Choose Exchange/Interval
+3. Set Time Period
+4. Click **> EXECUTE_ANALYSIS**
 
-### Advanced Charting
-- TradingView-style candlestick charts
-- Numerology overlays (PM/PY markers)
-- Interactive timeframe switching
-- Lightweight Charts library integration
+### 3. Export
+- **[DOWNLOAD RAW .CSV]** after completion
 
-### Data Processing
-- CSV export/import
-- Date patching from incorporation data
-- ML pattern recognition
-- Company-specific analysis
+### 4. Date Patch
+1. Upload `stocks.csv` + `te.csv`
+2. **RUN DATE UPDATE**
 
-## 🌐 API Endpoints Used
+### 5. Numerology
+1. Upload `stocks_updated.csv`
+2. **CALCULATE ALL**
 
-All endpoints use proper **V3 format**:
+### 6. ML Analysis
+1. Upload numerology CSV
+2. **ANALYZE BY COMPANY**
 
-| Endpoint | Format | Purpose |
-|----------|--------|---------|
-| Historical Candles | `/v3/historical-candle/{instrument}/{unit}/{interval}/{to}/{from}` | OHLC data |
-| Market Quote | `/v3/market-quote/ohlc` | Current prices |
-| Search | `/v3/search?query={symbol}` | Instrument lookup |
-| Auth Token | `/v2/login/authorization/token` | OAuth flow |
+### 7. Charts
+1. Search symbol
+2. Set incorporation date
+3. **OPEN CHART**
 
-### V3 Format Examples
+## 🔒 Security
 
-✅ **CORRECT**:
-```javascript
-/v3/historical-candle/NSE_EQ|INE009A01021/days/1/2024-11-26/2023-11-26
-/v3/historical-candle/NSE_EQ|INE009A01021/hours/4/2024-11-26/2024-11-01
-/v3/historical-candle/NSE_EQ|INE009A01021/weeks/1/2024-11-26/2022-11-26
-```
+- API secrets **server-side only**
+- OAuth via Next.js API routes
+- **No client-side credentials**
+- Rate limiting: 300ms
+- Token expires: 24 hours
 
-❌ **INCORRECT** (Old format):
-```javascript
-/v3/historical-candle/NSE_EQ|INE009A01021/day/2024-11-26/2023-11-26  // Missing interval!
-/v3/historical-candle/NSE_EQ|INE009A01021/1hour/2024-11-26/...       // Wrong unit format!
-```
+## 🚀 Deploy to Vercel
 
-## 🛡️ Security Best Practices
+### Quick Deploy
 
-1. **Never commit `config.js`** - Always in `.gitignore`
-2. **Use HTTPS** - In production, always serve over HTTPS
-3. **Rotate credentials** - Change API keys regularly
-4. **Monitor logs** - Check for suspicious activity
-5. **Rate limiting** - Built-in, but monitor usage
-6. **Token expiry** - Tokens valid for 24 hours
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/MrOug/Share/tree/nextjs-v3-console)
+
+### Manual Deployment
+
+1. **Push to GitHub** ✓ (Already done!)
+2. **Import to Vercel**
+   - [vercel.com](https://vercel.com) → New Project
+   - Import `MrOug/Share`
+   - Branch: `nextjs-v3-console`
+3. **Add Environment Variables**
+   ```
+   NEXT_PUBLIC_UPSTOX_API_KEY=your-key
+   UPSTOX_API_SECRET=your-secret
+   NEXT_PUBLIC_REDIRECT_URI=https://yourdomain.vercel.app/callback
+   ```
+4. **Update Upstox**
+   - Redirect URI: `https://yourdomain.vercel.app/callback`
+5. **Deploy!**
 
 ## 🐛 Troubleshooting
 
-### "No access token" error
-- Click [AUTH] button to authenticate
-- Check `config.js` has correct credentials
-- Verify redirect_uri matches Upstox app settings
+| Issue | Solution |
+|-------|----------|
+| No access token | Click [AUTH], allow popups |
+| API 400/401 | Check credentials, token expiry |
+| CSV errors | UTF-8 encoding, valid headers |
+| CORS errors | Use HTTP server, not `file://` |
 
-### "API Error 400/401"
-- Confirm API credentials are valid
-- Check token hasn't expired (24hr limit)
-- Verify instrument key format is correct
+## 📊 CSV Formats
 
-### Template literal error in charts
-- Fixed in production version
-- Uses string concatenation, not nested templates
+### Stock Export
+```csv
+Company Name,Incorporation Date,Current Price,...
+"Reliance Industries",08/05/1973,2850.50,...
 
-### CORS errors
-- Run from proper HTTP server (not `file://`)
-- Ensure localhost port matches redirect URI
-
-## 📚 Documentation
-
-- [Security Guide](./SECURITY.md) - Detailed security architecture
-- [Deployment Guide](./DEPLOYMENT.md) - Production deployment steps
-- [Upstox API Docs](https://upstox.com/developer/api-documentation) - Official API reference
-
-## 🔄 Updates & Maintenance
-
-### Checking for API Changes
-```bash
-# Monitor Upstox changelog
-https://upstox.com/developer/api-documentation/changelog
+Monthly Breakdown for Reliance:
+Date,Open,Close,High,Low,Change %
+Nov 2024,2800,2850.50,2900,2750,1.80
 ```
 
-### Updating Dependencies
-- Lightweight Charts: Check for updates
-- Chart.js: Monitor security advisories
+### Numerology Output
+```csv
+Stock,Incorporation_Date,Company_Chinese_Zodiac,Life_Path,...
+RELIANCE,08/05/1973,Ox,7,...
+```
 
-## ⚠️ Important Notes
+## 📚 Resources
 
-- **Access tokens expire after 24 hours** - Re-authenticate daily
-- **Rate limits apply** - Max 3 requests/second (configurable)
-- **Historical data limits**:
-  - Intraday (minutes/hours): From Jan 2022
-  - Daily/Weekly/Monthly: From Jan 2000
+- [Upstox V3 Docs](https://upstox.com/developer/api-documentation/v3/get-historical-candle-data/)
+- [Next.js Docs](https://nextjs.org/docs)
+- [Lightweight Charts](https://tradingview.github.io/lightweight-charts/)
 
-## 📞 Support
+## 📝 License
 
-- **Upstox API Issues**: support@upstox.com
-- **Documentation**: https://upstox.com/developer/api-documentation
-- **Developer Forum**: Check Upstox community
-
-## 📄 License
-
-Private use only. Ensure compliance with Upstox API terms of service.
+Private use. Comply with Upstox API terms.
 
 ---
 
-**Built with enterprise-grade security** | Zero exposed credentials | Production-ready architecture
+**🚀 Next.js 14 | 🔒 Secure OAuth | 🎨 Original UI**
